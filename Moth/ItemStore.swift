@@ -21,7 +21,16 @@ final class ItemStore {
     func delete(_ item: SavedItem) {
         LibraryFile.mutate { $0.removeAll { $0.id == item.id } }
         if let file = item.artworkFile { ArtworkStore.delete(named: file) }
+        AlbumDetailsService.forget(item.id)
         reload()
+    }
+
+    func toggleTrackHeard(_ trackID: String, in item: SavedItem) {
+        update(item) { item in
+            var heard = Set(item.heardTrackIDs ?? [])
+            if heard.contains(trackID) { heard.remove(trackID) } else { heard.insert(trackID) }
+            item.heardTrackIDs = heard.isEmpty ? nil : Array(heard)
+        }
     }
 
     func setListened(ids: Set<UUID>, _ listened: Bool) {
@@ -40,6 +49,7 @@ final class ItemStore {
             return gone
         }
         removed.compactMap(\.artworkFile).forEach(ArtworkStore.delete(named:))
+        removed.forEach { AlbumDetailsService.forget($0.id) }
         reload()
     }
 

@@ -26,6 +26,8 @@ struct SavedItem: Identifiable, Codable, Hashable {
     var artworkFile: String?
     var dateAdded: Date
     var listenedAt: Date?
+    /// Tracks marked heard on the album page (track IDs from AlbumDetails).
+    var heardTrackIDs: [String]? = nil
 
     var isListened: Bool { listenedAt != nil }
     var linkKey: String { LinkCleaner.key(for: url) }

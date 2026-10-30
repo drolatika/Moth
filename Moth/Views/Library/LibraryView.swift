@@ -39,8 +39,6 @@ struct LibraryView: View {
     @Environment(Connections.self) private var connections
     @Environment(\.theme) private var theme
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkListened = false
-    @AppStorage(SettingsKey.openLinksIn, store: AppGroup.defaults) private var openLinksIn = LinkDestination.app.rawValue
     @AppStorage(SettingsKey.libraryLayout, store: AppGroup.defaults) private var layoutRaw = LibraryLayout.grid.rawValue
     @AppStorage(SettingsKey.libraryGrouping, store: AppGroup.defaults) private var groupingRaw = LibraryGrouping.newest.rawValue
 
@@ -52,8 +50,7 @@ struct LibraryView: View {
     @State private var selecting = false
     @State private var selection: Set<UUID> = []
     @State private var draggingCard = false
-    @State private var browserLink: BrowserLink?
-    @State private var heldItem: SavedItem?
+    @State private var openItem: SavedItem?
     @State private var searchVisible = false
     @FocusState private var searchFocused: Bool
 
@@ -95,24 +92,14 @@ struct LibraryView: View {
         }
         .background { ThemeBackdrop() }
         .overlay(alignment: .bottom) { bottomBar }
-        .overlay {
-            if let item = heldItem {
-                HoldMenu(
-                    item: item,
-                    onListen: { dismissMenu(); open(item) },
-                    onSelect: {
-                        dismissMenu()
-                        selecting = true
-                        selection = [item.id]
-                    },
-                    onRemove: {
-                        dismissMenu()
-                        withAnimation(.snappy) { store.delete(item) }
-                    },
-                    onDismiss: dismissMenu
-                )
-                .transition(.opacity)
-            }
+        .sheet(item: $openItem) { item in
+            AlbumDetailView(itemID: item.id, onSelect: { selected in
+                selecting = true
+                selection = [selected.id]
+            })
+            .environment(store)
+            .themed(theme)
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingAdd) {
             AddLinkView().environment(store).themed(theme)
@@ -120,7 +107,6 @@ struct LibraryView: View {
         .sheet(isPresented: $showingSettings) {
             SettingsView().environment(store).environment(connections).themed(theme)
         }
-        .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { store.reload() }
         }
@@ -236,7 +222,7 @@ struct LibraryView: View {
                 direction: shelf == .queue ? 1 : -1,
                 isDragging: $draggingCard,
                 onThrow: { withAnimation(.snappy) { store.setListened(item, shelf == .queue) } },
-                onTap: { withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { heldItem = item } }
+                onTap: { openItem = item }
             ) {
                 if layout == .grid {
                     AlbumCard(item: item)
@@ -342,25 +328,9 @@ struct LibraryView: View {
 
     // MARK: Actions
 
-    private func open(_ item: SavedItem) {
-        if LinkDestination(rawValue: openLinksIn) == .browser {
-            browserLink = BrowserLink(url: item.url)
-        } else {
-            URLOpener.open(item)
-        }
-        if autoMarkListened && !item.isListened {
-            // Let the app switch happen before the card moves to Heard.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { store.setListened(item, true) }
-        }
-    }
-
     private func toggle(_ item: SavedItem) {
         if selection.contains(item.id) { selection.remove(item.id) } else { selection.insert(item.id) }
         Haptics.impact(.light)
-    }
-
-    private func dismissMenu() {
-        withAnimation(.easeOut(duration: 0.2)) { heldItem = nil }
     }
 
     private func endSelecting() {

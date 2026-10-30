@@ -139,6 +139,42 @@ final class SpotifyService: NSObject, ASWebAuthenticationPresentationContextProv
         }
     }
 
+    /// Tracklist, label and copyright for an album (or the album a track is on).
+    func albumDetails(kind: String, id: String) async throws -> AlbumDetails {
+        var albumID = id
+        if kind == "track" {
+            let track = try await get("/tracks/\(id)")
+            guard let album = (track["album"] as? [String: Any])?["id"] as? String else { throw ServiceError.badResponse }
+            albumID = album
+        }
+        let album = try await get("/albums/\(albumID)")
+        var details = AlbumDetails()
+        details.label = album["label"] as? String
+        details.copyright = (album["copyrights"] as? [[String: Any]])?.compactMap { $0["text"] as? String }.first
+        details.genre = (album["genres"] as? [String])?.prefix(3).joined(separator: ", ")
+        if let release = album["release_date"] as? String {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = release.count == 4 ? "yyyy" : "yyyy-MM-dd"
+            details.releaseDate = formatter.date(from: release)
+        }
+        let items = ((album["tracks"] as? [String: Any])?["items"] as? [[String: Any]]) ?? []
+        details.tracks = items.compactMap { track in
+            guard let name = track["name"] as? String else { return nil }
+            let artists = (track["artists"] as? [[String: Any]] ?? []).compactMap { $0["name"] as? String }
+            return AlbumDetails.Track(
+                id: track["id"] as? String ?? name,
+                number: track["track_number"] as? Int,
+                disc: track["disc_number"] as? Int,
+                title: name,
+                artist: artists.joined(separator: ", "),
+                durationMs: track["duration_ms"] as? Int,
+                url: ((track["external_urls"] as? [String: Any])?["spotify"] as? String).flatMap(URL.init(string:))
+            )
+        }
+        return details
+    }
+
     // MARK: Plumbing
 
     private func get(_ path: String) async throws -> [String: Any] {

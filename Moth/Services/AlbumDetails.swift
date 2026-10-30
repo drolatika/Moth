@@ -51,7 +51,14 @@ enum AlbumDetailsService {
 
     // MARK: Apple Music
 
+    /// Apple's lookup API first; if that comes back empty, the album's own web page,
+    /// which carries the tracklist as schema.org data and the ℗ line in its footer.
     private static func appleMusic(_ url: URL) async throws -> AlbumDetails? {
+        if let details = try? await appleMusicLookup(url), !details.tracks.isEmpty { return details }
+        return try await appleMusicPage(url)
+    }
+
+    private static func appleMusicLookup(_ url: URL) async throws -> AlbumDetails? {
         let parts = url.pathComponents.filter { $0 != "/" }
         let country = parts.first.flatMap { $0.count == 2 ? $0 : nil } ?? "us"
         var collectionID: String?
@@ -62,11 +69,11 @@ enum AlbumDetailsService {
         let trackID = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "i" }?.value
             ?? (parts.contains("song") ? parts.last : nil)
         if collectionID == nil, let trackID {
-            let lookup = try await json("https://itunes.apple.com/lookup?id=\(trackID)&country=\(country)")
+            let lookup = try await json("https://itunes.apple.com/lookup?id=\(trackID)&country=\(country)", session: apiSession)
             if let id = ((lookup["results"] as? [[String: Any]])?.first?["collectionId"] as? Int) { collectionID = String(id) }
         }
         guard let collectionID else { return nil }
-        let lookup = try await json("https://itunes.apple.com/lookup?id=\(collectionID)&entity=song&country=\(country)")
+        let lookup = try await json("https://itunes.apple.com/lookup?id=\(collectionID)&entity=song&limit=200&country=\(country)", session: apiSession)
         let results = lookup["results"] as? [[String: Any]] ?? []
         guard let album = results.first(where: { $0["wrapperType"] as? String == "collection" }) else { return nil }
         var details = AlbumDetails()
@@ -86,6 +93,33 @@ enum AlbumDetailsService {
             )
         }
         return details
+    }
+
+    private static func appleMusicPage(_ url: URL) async throws -> AlbumDetails? {
+        let html = try await page(url)
+        var details = AlbumDetails()
+        for block in ldJSONBlocks(html) {
+            let tracks = (block["tracks"] as? [[String: Any]]) ?? (block["workExample"] as? [[String: Any]]) ?? []
+            guard !tracks.isEmpty else { continue }
+            details.tracks = tracks.enumerated().compactMap { index, track in
+                guard let name = track["name"] as? String else { return nil }
+                let link = (track["url"] as? String).flatMap(URL.init(string:))
+                return AlbumDetails.Track(id: link?.absoluteString ?? "\(index)-\(name)", number: index + 1, disc: nil,
+                                          title: name, artist: nil,
+                                          durationMs: (track["duration"] as? String).flatMap(parseISODuration), url: link)
+            }
+            details.releaseDate = (block["datePublished"] as? String).flatMap(parseDay)
+            if let genres = block["genre"] as? [String] {
+                details.genre = genres.filter { $0 != "Music" }.prefix(3).joined(separator: ", ").nilIfEmpty
+            } else if let genre = block["genre"] as? String {
+                details.genre = genre
+            }
+            break
+        }
+        if let range = html.range(of: #"℗[^<\n]+"#, options: .regularExpression) {
+            details.copyright = MetadataFetcher.decodeEntities(String(html[range])).trimmingCharacters(in: .whitespaces)
+        }
+        return details.tracks.isEmpty ? nil : details
     }
 
     // MARK: Bandcamp
@@ -265,9 +299,16 @@ enum AlbumDetailsService {
 
     // MARK: Helpers
 
-    private static func json(_ string: String) async throws -> [String: Any] {
+    /// For JSON APIs: no browser user agent, which some APIs treat differently.
+    private static let apiSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 12
+        return URLSession(configuration: config)
+    }()
+
+    private static func json(_ string: String, session: URLSession = MetadataFetcher.session) async throws -> [String: Any] {
         guard let url = URL(string: string) else { throw ServiceError.badResponse }
-        let (data, _) = try await MetadataFetcher.session.data(from: url)
+        let (data, _) = try await session.data(from: url)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ServiceError.badResponse }
         return object
     }
@@ -275,6 +316,18 @@ enum AlbumDetailsService {
     private static func page(_ url: URL) async throws -> String {
         let (data, _) = try await MetadataFetcher.session.data(from: url)
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Every schema.org JSON-LD object on a page (arrays are flattened).
+    private static func ldJSONBlocks(_ html: String) -> [[String: Any]] {
+        guard let regex = try? NSRegularExpression(pattern: #"(?s)<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>"#) else { return [] }
+        let ns = html as NSString
+        return regex.matches(in: html, range: NSRange(location: 0, length: ns.length)).flatMap { match -> [[String: Any]] in
+            guard let data = ns.substring(with: match.range(at: 1)).data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) else { return [] }
+            if let dict = object as? [String: Any] { return [dict] }
+            return object as? [[String: Any]] ?? []
+        }
     }
 
     /// Depth-first search for the first value stored under `key`.

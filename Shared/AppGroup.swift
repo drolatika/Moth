@@ -4,7 +4,7 @@ import Foundation
 /// injected into both Info.plists from the APP_GROUP_ID build setting.
 enum AppGroup {
     static let id: String =
-        Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String ?? "group.com.moth.app"
+        Bundle.main.object(forInfoDictionaryKey: "AppGroupID") as? String ?? "group.com.ryanschlecht.moth"
 
     static var containerURL: URL {
         if let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id) {

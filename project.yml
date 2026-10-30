@@ -42,6 +42,7 @@ targets:
     dependencies:
       - target: MothShare
         embed: true
+    scheme: {}
 
   MothShare:
     type: app-extension

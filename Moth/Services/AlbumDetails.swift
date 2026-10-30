@@ -34,7 +34,7 @@ enum AlbumDetailsService {
     }
 
     static func details(for item: SavedItem) async -> AlbumDetails? {
-        if let cached = cache(for: item.id), Date().timeIntervalSince(cached.fetchedAt) < 7 * 86_400 {
+        if let cached = cache(for: item.id), !cached.tracks.isEmpty, Date().timeIntervalSince(cached.fetchedAt) < 7 * 86_400 {
             return cached
         }
         let fetched: AlbumDetails?

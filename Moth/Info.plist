@@ -22,6 +22,29 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>AppGroupID</key>
 	<string>$(APP_GROUP_ID)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>UnifrakturMaguntia-Book.ttf</string>
+		<string>GrenzeGotisch-Medium.ttf</string>
+		<string>CinzelDecorative-Black.ttf</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>moth</string>
+			</array>
+		</dict>
+	</array>
+	<key>SpotifyClientID</key>
+	<string>$(SPOTIFY_CLIENT_ID)</string>
+	<key>LastFMAPIKey</key>
+	<string>$(LASTFM_API_KEY)</string>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>Moth shows what you've played recently on Apple Music in your listening stats.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchScreen</key>

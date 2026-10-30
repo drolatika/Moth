@@ -22,6 +22,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>AppGroupID</key>
 	<string>$(APP_GROUP_ID)</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>UnifrakturMaguntia-Book.ttf</string>
+		<string>GrenzeGotisch-Medium.ttf</string>
+		<string>CinzelDecorative-Black.ttf</string>
+	</array>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionAttributes</key>

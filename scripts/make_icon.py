@@ -1,20 +1,23 @@
 """Renders Moth's app icon and the saved alternates.
 
-The icon is a Fraktur "M" (UnifrakturMaguntia, SIL OFL, in Design/fonts)
+The icon is a Fraktur "M" (UnifrakturMaguntia, SIL OFL, in Shared/Fonts)
 glowing orange on near-black: a light for the moth.
 
 Usage: python3 scripts/make_icon.py   (needs Pillow and numpy)
 Writes:
-  Moth/Assets.xcassets/AppIcon.appiconset/AppIcon.png   the app icon (M1)
+  Moth/Assets.xcassets/AppIcon.appiconset               the app icon (M1)
+  Moth/Assets.xcassets/AppIcon-*.appiconset             alternate icons, chosen in Settings
+  Moth/Assets.xcassets/IconPreview-*.imageset           small previews for the Settings picker
   Design/Icons/*.png                                    the icon and alternates at 1024px
 """
+import json
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
-FONT = ROOT / "Design/fonts/UnifrakturMaguntia-Book.ttf"
+FONT = ROOT / "Shared/Fonts/UnifrakturMaguntia-Book.ttf"
 
 SIZE = 1024
 S = 4  # supersampling factor
@@ -132,18 +135,47 @@ def t8():
     return img
 
 
-def export(img, path):
+def export(img, path, size=SIZE):
     path.parent.mkdir(parents=True, exist_ok=True)
-    img.convert("RGB").resize((SIZE, SIZE), Image.LANCZOS).save(path, optimize=True)
+    img.convert("RGB").resize((size, size), Image.LANCZOS).save(path, optimize=True)
     print(f"wrote {path.relative_to(ROOT)}")
+
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def asset_catalog_icon(img, name):
+    folder = ROOT / f"Moth/Assets.xcassets/{name}.appiconset"
+    export(img, folder / "Icon.png")
+    write_json(folder / "Contents.json", {
+        "images": [{"filename": "Icon.png", "idiom": "universal", "platform": "ios", "size": "1024x1024"}],
+        "info": {"author": "xcode", "version": 1},
+    })
+
+
+def preview(img, name):
+    folder = ROOT / f"Moth/Assets.xcassets/IconPreview-{name}.imageset"
+    export(img, folder / "preview.png", size=180)
+    write_json(folder / "Contents.json", {
+        "images": [{"filename": "preview.png", "idiom": "universal"}],
+        "info": {"author": "xcode", "version": 1},
+    })
 
 
 def main():
     icon = m1()
     export(icon, ROOT / "Moth/Assets.xcassets/AppIcon.appiconset/AppIcon.png")
     export(icon, ROOT / "Design/Icons/M1-app-icon.png")
-    for name, render in (("M7-outline", m7), ("M9-ring", m9), ("M10-illuminated", m10), ("T8-wordmark", t8)):
-        export(render(), ROOT / f"Design/Icons/alternates/{name}.png")
+    preview(icon, "Glow")
+    alternates = (("Outline", "M7-outline", m7), ("Ring", "M9-ring", m9),
+                  ("Illuminated", "M10-illuminated", m10), ("Wordmark", "T8-wordmark", t8))
+    for name, design_name, render in alternates:
+        img = render()
+        export(img, ROOT / f"Design/Icons/alternates/{design_name}.png")
+        asset_catalog_icon(img, f"AppIcon-{name}")
+        preview(img, name)
 
 
 if __name__ == "__main__":

@@ -19,9 +19,9 @@ struct Theme: Identifiable, Equatable {
 
     static let all: [Theme] = [
         Theme(id: "moth", name: "Moth",
-              background: Color(hex: 0x0A0A0C), surface: Color(hex: 0x18171C),
-              text: Color(hex: 0xF4EFE6), secondaryText: Color(hex: 0x8F8A97),
-              accent: Color(hex: 0xFF784A), onAccent: Color(hex: 0x0A0A0C), isDark: true),
+              background: Color(hex: 0x131213), surface: Color(hex: 0x1D1B1C),
+              text: Color(hex: 0xECE3D0), secondaryText: Color(hex: 0x9A9084),
+              accent: Color(hex: 0xC2483A), onAccent: Color(hex: 0xF4EAD8), isDark: true),
         Theme(id: "paper", name: "Paper",
               background: Color(hex: 0xF7F3EA), surface: Color(hex: 0xFFFFFF),
               text: Color(hex: 0x1E1B16), secondaryText: Color(hex: 0x7A7266),

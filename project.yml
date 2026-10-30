@@ -19,6 +19,9 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     STRING_CATALOG_GENERATE_SYMBOLS: YES
+    # Listening services. Leave empty until set up (see README); the app shows "Needs setup".
+    SPOTIFY_CLIENT_ID: ""
+    LASTFM_API_KEY: ""
 
 targets:
   Moth:
@@ -34,6 +37,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Moth/Moth.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-Outline AppIcon-Ring AppIcon-Illuminated AppIcon-Wordmark"
     dependencies:
       - target: MothShare
         embed: true

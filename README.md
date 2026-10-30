@@ -14,14 +14,36 @@ open Moth.xcodeproj
 
 The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlecht.moth.share`) and its App Group is `group.com.ryanschlecht.moth`, all set in `project.yml`. Signing uses development team `JH4ZQ9MS78`, also set in `project.yml`, so regenerating the project keeps it. Both targets use the same App Group, which is how the share extension writes into the app's library.
 
+## Using it
+
+- **Queue and Heard** are two pages; swipe left for Heard. Small moths circle the title on Queue and fly to the stone lantern as you swipe; it catches light and they gather around it. Swiping back puts it out.
+- **Tap** an album to open it in the app it came from (or in Moth's own browser, set in Settings).
+- **Hold** an album for the menu: Listen, Select, Remove.
+- **Press, pause briefly, then flick** an album toward the other page to move it there (Queue → Heard, or back).
+- **Select** lets you mark several as heard (or back to the queue) or remove them at once.
+- **Settings** (gear, top left): profile placeholder for future accounts, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
+
+## Connecting listening services
+
+Stats always include what you mark as heard in Moth. Each service adds more once it's set up; until then its row says "Needs setup".
+
+- **Last.fm** (easiest): create an API account at last.fm/api/account/create, put the API key in `LASTFM_API_KEY` in `project.yml`, run `xcodegen`, rebuild, then connect with your Last.fm username. Adds this week's scrobbles and top artists.
+- **Spotify**: create an app at developer.spotify.com/dashboard, add the redirect URI `moth://spotify-callback`, add your Spotify account under Users and Access, put the Client ID in `SPOTIFY_CLIENT_ID` in `project.yml`, run `xcodegen` and rebuild. Uses PKCE, so there is no client secret in the app. Spotify only shares your last 50 plays and your top lists, so listening time from Spotify covers those plays.
+- **Apple Music**: needs the paid developer account. In Certificates, Identifiers & Profiles, enable the MusicKit app service for `com.ryanschlecht.moth`. Apple doesn't expose listening time, so Stats shows what you've played recently.
+
+The Spotify Client ID and Last.fm API key aren't secret (both are designed to ship inside apps), but if the repository is public you may still prefer to keep them out of it.
+
 ## How it works
 
 - **Share extension** (`ShareExtension/`) accepts a URL or text containing a link, fetches metadata, downloads the artwork, saves it, and dismisses itself.
 - **Metadata** (`Shared/MetadataFetcher.swift`) uses Spotify and SoundCloud oEmbed, the iTunes Lookup API for Apple Music, the Deezer API and YouTube oEmbed, then falls back to Open Graph tags (Bandcamp, Tidal, anything else). Short links (`spotify.link`, `deezer.page.link`, …) are resolved first and tracking params are stripped, so saving the same album twice just bumps it to the top.
 - **Opening** tries the universal link (lands in the installed app), then the app's URL scheme, then Safari.
 - **Storage** is a JSON file plus downsampled JPEG artwork in the App Group container.
-- **Themes**: 15 of them in `Shared/Theme.swift`, picked from the palette button. The share sheet uses your theme too.
+- **Header art** (`Moth/Views/Header/`): the lantern and moths are drawn in code with SwiftUI `Canvas`, driven by the page position and a timeline, and pause when Reduce Motion is on.
+- **Themes**: 15 in `Shared/Theme.swift`. The default "Moth" theme is a washed near-black so the lantern stands out.
 
-## Icon
+## Fonts and icon
 
-The app icon is a glowing Fraktur "M" set in UnifrakturMaguntia (SIL Open Font License, bundled in `Design/fonts`). `scripts/make_icon.py` renders it into the asset catalog, along with alternate designs kept in `Design/Icons/alternates` (outline, ring, illuminated initial, and the full "Moth" wordmark). Needs Pillow and numpy.
+All bundled fonts are under the SIL Open Font License (free for commercial use; licences in `Design/fonts`): UnifrakturMaguntia (the Fraktur "M"), Grenze Gotisch Medium (Gothic lowercase), and Cinzel Decorative Black (the illuminated Q and H). The font files live in `Shared/Fonts`.
+
+The app icon is the glowing Fraktur "M". `scripts/make_icon.py` renders it and the four alternates (outline, ring, illuminated initial, wordmark) into the asset catalog, plus the previews used in Settings. Needs Pillow and numpy.

@@ -20,4 +20,7 @@ enum AppGroup {
 enum SettingsKey {
     static let theme = "themeID"
     static let autoMarkListened = "autoMarkListened"
+    static let haptics = "haptics"
+    static let openLinksIn = "openLinksIn"
+    static let lastFMUser = "lastFMUser"
 }

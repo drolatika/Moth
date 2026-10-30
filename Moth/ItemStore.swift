@@ -18,21 +18,26 @@ final class ItemStore {
         update(item) { $0.listenedAt = listened ? .now : nil }
     }
 
-    func toggleListened(_ item: SavedItem) {
-        setListened(item, !item.isListened)
-    }
-
     func delete(_ item: SavedItem) {
         LibraryFile.mutate { $0.removeAll { $0.id == item.id } }
         if let file = item.artworkFile { ArtworkStore.delete(named: file) }
         reload()
     }
 
-    func clearListened() {
+    func setListened(ids: Set<UUID>, _ listened: Bool) {
+        LibraryFile.mutate { items in
+            for index in items.indices where ids.contains(items[index].id) {
+                items[index].listenedAt = listened ? .now : nil
+            }
+        }
+        reload()
+    }
+
+    func delete(ids: Set<UUID>) {
         let removed = LibraryFile.mutate { items -> [SavedItem] in
-            let listened = items.filter(\.isListened)
-            items.removeAll(where: \.isListened)
-            return listened
+            let gone = items.filter { ids.contains($0.id) }
+            items.removeAll { ids.contains($0.id) }
+            return gone
         }
         removed.compactMap(\.artworkFile).forEach(ArtworkStore.delete(named:))
         reload()

@@ -1,3 +1,4 @@
+import Foundation
 import MusicKit
 
 struct RecentlyPlayed: Identifiable {

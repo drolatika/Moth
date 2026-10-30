@@ -28,7 +28,7 @@ struct AlbumCard: View {
                         .lineLimit(1)
                 }
                 HStack(spacing: 6) {
-                    PlatformBadge(platform: item.platform)
+                    PlatformBadge(platform: item.platform, seed: item.id.hashValue)
                     if item.kind != .other {
                         Text("· \(item.kind.label)")
                             .font(.caption2)
@@ -70,7 +70,7 @@ struct AlbumRow: View {
                     Text(artist).font(.footnote).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
                 HStack(spacing: 6) {
-                    PlatformBadge(platform: item.platform)
+                    PlatformBadge(platform: item.platform, seed: item.id.hashValue)
                     if item.kind != .other {
                         Text("· \(item.kind.label)").font(.caption2).foregroundStyle(theme.secondaryText.opacity(0.8))
                     }

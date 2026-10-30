@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// What appears when you press and hold an album: the screen dims, the album
-/// lifts, and three actions sit beneath it. Tap outside to close.
+/// What appears when you tap an album: the screen dims, the album lifts, and
+/// three actions sit beneath it. Listen is the only way into the album. Tap
+/// outside to close.
 struct HoldMenu: View {
     let item: SavedItem
     let onListen: () -> Void

@@ -6,7 +6,28 @@ enum Shelf: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// Where tapping an album takes you.
+/// How the albums are laid out.
+enum LibraryLayout: String, CaseIterable, Identifiable {
+    case grid, rows
+    var id: String { rawValue }
+    var label: String { self == .grid ? "Grid" : "Rows" }
+    var symbol: String { self == .grid ? "square.grid.2x2" : "list.bullet" }
+}
+
+/// How the albums are ordered: newest first, or in sections by type or service.
+enum LibraryGrouping: String, CaseIterable, Identifiable {
+    case newest, type, service
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .newest: "Newest First"
+        case .type: "By Type"
+        case .service: "By Service"
+        }
+    }
+}
+
+/// Where "Listen" takes you.
 enum LinkDestination: String, CaseIterable, Identifiable {
     case app, browser
     var id: String { rawValue }
@@ -20,6 +41,8 @@ struct LibraryView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkListened = false
     @AppStorage(SettingsKey.openLinksIn, store: AppGroup.defaults) private var openLinksIn = LinkDestination.app.rawValue
+    @AppStorage(SettingsKey.libraryLayout, store: AppGroup.defaults) private var layoutRaw = LibraryLayout.grid.rawValue
+    @AppStorage(SettingsKey.libraryGrouping, store: AppGroup.defaults) private var groupingRaw = LibraryGrouping.newest.rawValue
 
     @State private var progress: Double = 0
     @State private var page: Shelf? = .queue
@@ -31,11 +54,14 @@ struct LibraryView: View {
     @State private var draggingCard = false
     @State private var browserLink: BrowserLink?
     @State private var heldItem: SavedItem?
+    @State private var searchVisible = false
     @FocusState private var searchFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var currentShelf: Shelf { progress < 0.5 ? .queue : .heard }
+    private var layout: LibraryLayout { LibraryLayout(rawValue: layoutRaw) ?? .grid }
+    private var grouping: LibraryGrouping { LibraryGrouping(rawValue: groupingRaw) ?? .newest }
 
     private func items(on shelf: Shelf) -> [SavedItem] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -61,6 +87,10 @@ struct LibraryView: View {
                 onSettings: { showingSettings = true },
                 onAdd: { showingAdd = true }
             )
+            if searchVisible {
+                searchBar
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             pager
         }
         .background { ThemeBackdrop() }
@@ -133,25 +163,72 @@ struct LibraryView: View {
                     .padding(.top, 70)
                     .padding(.horizontal, 24)
             } else {
-                LazyVGrid(columns: columns, spacing: 22) {
-                    ForEach(list) { item in
-                        cell(item, on: shelf)
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(sections(for: list)) { section in
+                        if let title = section.title {
+                            Text(title)
+                                .font(MothFont.gothic(24))
+                                .foregroundStyle(theme.text)
+                                .padding(.top, 6)
+                        }
+                        if layout == .grid {
+                            LazyVGrid(columns: columns, spacing: 22) {
+                                ForEach(section.items) { item in cell(item, on: shelf) }
+                            }
+                        } else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(section.items) { item in cell(item, on: shelf) }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 110)
+                .padding(.bottom, 100)
             }
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.immediately)
+        .onScrollGeometryChange(for: Double.self) { scroll in
+            scroll.contentOffset.y + scroll.contentInsets.top
+        } action: { _, pulled in
+            revealOrHideSearch(scrollY: pulled)
+        }
+    }
+
+    private struct ShelfSection: Identifiable {
+        let id: String
+        let title: String?
+        let items: [SavedItem]
+    }
+
+    private func sections(for list: [SavedItem]) -> [ShelfSection] {
+        switch grouping {
+        case .newest:
+            return [ShelfSection(id: "all", title: nil, items: list)]
+        case .type:
+            let order: [SavedItem.Kind] = [.album, .track, .playlist, .artist, .episode, .other]
+            return order.compactMap { kind in
+                let matches = list.filter { $0.kind == kind }
+                return matches.isEmpty ? nil : ShelfSection(id: kind.rawValue, title: kind.pluralLabel, items: matches)
+            }
+        case .service:
+            return Platform.allCases.compactMap { platform in
+                let matches = list.filter { $0.platform == platform }
+                return matches.isEmpty ? nil : ShelfSection(id: platform.rawValue, title: platform.name, items: matches)
+            }
+        }
     }
 
     @ViewBuilder
     private func cell(_ item: SavedItem, on shelf: Shelf) -> some View {
         if selecting {
             Button { toggle(item) } label: {
-                AlbumCard(item: item, selected: selection.contains(item.id))
+                if layout == .grid {
+                    AlbumCard(item: item, selected: selection.contains(item.id))
+                } else {
+                    AlbumRow(item: item, selected: selection.contains(item.id))
+                }
             }
             .buttonStyle(PressableStyle())
         } else {
@@ -159,15 +236,81 @@ struct LibraryView: View {
                 direction: shelf == .queue ? 1 : -1,
                 isDragging: $draggingCard,
                 onThrow: { withAnimation(.snappy) { store.setListened(item, shelf == .queue) } },
-                onHold: { withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { heldItem = item } }
+                onTap: { withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { heldItem = item } }
             ) {
-                Button { open(item) } label: { AlbumCard(item: item) }
-                    .buttonStyle(PressableStyle())
+                if layout == .grid {
+                    AlbumCard(item: item)
+                } else {
+                    AlbumRow(item: item)
+                }
             }
         }
     }
 
-    // MARK: Bottom: search, or selection actions
+    // MARK: Search and view options
+
+    private var searchBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(theme.secondaryText)
+                TextField("Search albums & artists", text: $searchText)
+                    .focused($searchFocused)
+                    .submitLabel(.search)
+                    .autocorrectionDisabled()
+                    .foregroundStyle(theme.text)
+                if !searchText.isEmpty {
+                    Button { searchText = "" } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(theme.secondaryText)
+                    }
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 40)
+            .background(theme.surface, in: Capsule())
+
+            Menu {
+                Section("View") {
+                    Picker("View", selection: $layoutRaw) {
+                        ForEach(LibraryLayout.allCases) { option in
+                            Label(option.label, systemImage: option.symbol).tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+                Section("Order") {
+                    Picker("Order", selection: $groupingRaw) {
+                        ForEach(LibraryGrouping.allCases) { option in
+                            Text(option.label).tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                }
+            } label: {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(theme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(theme.surface, in: Circle())
+            }
+            .accessibilityLabel("View options")
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    /// Pulling a page down past the top reveals the search bar; scrolling back
+    /// down tucks it away again unless you're using it.
+    private func revealOrHideSearch(scrollY: Double) {
+        if scrollY < -50 && !searchVisible {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { searchVisible = true }
+            Haptics.impact(.light)
+        } else if scrollY > 60 && searchVisible && searchText.isEmpty && !searchFocused {
+            withAnimation(.easeOut(duration: 0.2)) { searchVisible = false }
+        }
+    }
+
+    // MARK: Bottom: selection actions
 
     @ViewBuilder
     private var bottomBar: some View {
@@ -194,33 +337,6 @@ struct LibraryView: View {
             .background(theme.surface.opacity(0.97), in: Capsule())
             .padding(.horizontal, 20)
             .padding(.bottom, 6)
-        } else {
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass").foregroundStyle(theme.secondaryText)
-                TextField("Search albums & artists", text: $searchText)
-                    .focused($searchFocused)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .foregroundStyle(theme.text)
-                if !searchText.isEmpty {
-                    Button { searchText = "" } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(theme.secondaryText)
-                    }
-                    .accessibilityLabel("Clear search")
-                }
-            }
-            .padding(.horizontal, 18)
-            .frame(height: 48)
-            .background(theme.surface.opacity(0.95), in: Capsule())
-            .overlay { Capsule().strokeBorder(theme.text.opacity(0.06)) }
-            .padding(.horizontal, 30)
-            .padding(.bottom, 6)
-            .background(alignment: .bottom) {
-                LinearGradient(colors: [theme.background.opacity(0), theme.background], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 130)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(false)
-            }
         }
     }
 
@@ -264,6 +380,19 @@ struct SafariView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
 }
 
+extension SavedItem.Kind {
+    var pluralLabel: String {
+        switch self {
+        case .album: "Albums"
+        case .track: "Tracks"
+        case .playlist: "Playlists"
+        case .artist: "Artists"
+        case .episode: "Episodes"
+        case .other: "Links"
+        }
+    }
+}
+
 private struct EmptyShelfView: View {
     let shelf: Shelf
     let isSearching: Bool
@@ -292,6 +421,6 @@ private struct EmptyShelfView: View {
         if isSearching { return "Try another album or artist." }
         return shelf == .queue
             ? "In Spotify, Apple Music, Bandcamp or anywhere else, tap Share and choose Moth."
-            : "Press and hold an album for a moment, then flick it toward the lantern."
+            : "Press and hold an album on the queue, then throw it toward the lantern."
     }
 }

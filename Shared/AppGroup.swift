@@ -23,4 +23,6 @@ enum SettingsKey {
     static let haptics = "haptics"
     static let openLinksIn = "openLinksIn"
     static let lastFMUser = "lastFMUser"
+    static let libraryLayout = "libraryLayout"
+    static let libraryGrouping = "libraryGrouping"
 }

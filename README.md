@@ -19,9 +19,9 @@ The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlec
 ## Using it
 
 - **Queue and Heard** are two pages; swipe left for Heard. Small moths circle the title on Queue and fly to the stone lantern as you swipe; it catches light and they gather around it. Swiping back puts it out.
-- **Tap** an album to open it in the app it came from (or in Moth's own browser, set in Settings).
-- **Hold** an album still for the menu: Listen, Select, Remove.
-- **Press, then move**: the album lifts and follows your finger; flick it toward the other page to move it there (Queue → Heard, or back). Quick swipes still page and scroll as normal.
+- **Tap** an album for its menu: Listen, Select, Remove. Listen is the only thing that opens the album.
+- **Press and hold** an album to pick it up; throw it toward the other page to move it there (Queue → Heard, or back). Quick swipes still page and scroll as normal.
+- **Pull down** on either page to reveal the search bar under the header, with the view options (three lines) beside it: Grid or Rows, and Newest First, By Type or By Service.
 - **Select** lets you mark several as heard (or back to the queue) or remove them at once.
 - **Settings** (gear, top left): profile placeholder for future accounts, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct NollApp: App {
+struct MothApp: App {
     @State private var store = ItemStore()
     @AppStorage(SettingsKey.theme, store: AppGroup.defaults) private var themeID = Theme.all[0].id
 

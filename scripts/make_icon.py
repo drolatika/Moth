@@ -1,75 +1,149 @@
-"""Renders Noll's app icon: a record with a bookmark ribbon tucked into it.
+"""Renders Moth's app icon and the saved alternates.
 
-Usage: python3 scripts/make_icon.py
-Writes Noll/Assets.xcassets/AppIcon.appiconset/AppIcon.png (1024x1024).
+The icon is a Fraktur "M" (UnifrakturMaguntia, SIL OFL, in Design/fonts)
+glowing orange on near-black: a light for the moth.
+
+Usage: python3 scripts/make_icon.py   (needs Pillow and numpy)
+Writes:
+  Moth/Assets.xcassets/AppIcon.appiconset/AppIcon.png   the app icon (M1)
+  Design/Icons/*.png                                    the icon and alternates at 1024px
 """
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFilter
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+ROOT = Path(__file__).resolve().parent.parent
+FONT = ROOT / "Design/fonts/UnifrakturMaguntia-Book.ttf"
 
 SIZE = 1024
 S = 4  # supersampling factor
 W = SIZE * S
 
-INK_TOP = (30, 28, 38)
-INK_BOTTOM = (12, 11, 16)
-DISC = (8, 8, 10)
-GROOVE = (24, 23, 29)
-ACCENT = (255, 90, 54)
-RIM = (46, 44, 56)
+INK = (10, 10, 12)
+GLOW = (255, 120, 74)
 CREAM = (244, 239, 230)
+PARCHMENT = (236, 225, 200)
+SEPIA = (60, 42, 26)
+VERMILION = (226, 72, 42)
+GOLD = (214, 172, 98)
 
 
-def vertical_gradient(top, bottom):
-    img = Image.new("RGB", (1, W))
-    for y in range(W):
-        t = y / (W - 1)
-        img.putpixel((0, y), tuple(round(a + (b - a) * t) for a, b in zip(top, bottom)))
-    return img.resize((W, W))
+def C(x):
+    return x * W
+
+
+def canvas(color):
+    return Image.new("RGBA", (W, W), color + (255,))
+
+
+def layer():
+    return Image.new("RGBA", (W, W), (0, 0, 0, 0))
+
+
+def soft_blur(img, radius):
+    """Gaussian blur that doesn't darken a layer's edges toward black."""
+    arr = np.asarray(img).astype(np.float32)
+    alpha = arr[..., 3:4] / 255.0
+    pre = Image.fromarray(np.clip(arr[..., :3] * alpha, 0, 255).astype(np.uint8), "RGB")
+    pre = np.asarray(pre.filter(ImageFilter.GaussianBlur(radius))).astype(np.float32)
+    a = np.asarray(img.split()[3].filter(ImageFilter.GaussianBlur(radius))).astype(np.float32)[..., None] / 255.0
+    rgb = np.where(a > 1e-4, pre / np.maximum(a, 1e-4), 0)
+    return Image.fromarray(np.concatenate([np.clip(rgb, 0, 255), a * 255], axis=-1).astype(np.uint8), "RGBA")
+
+
+def glow(img, draw, blur, strength):
+    lit = layer()
+    draw(ImageDraw.Draw(lit))
+    halo = soft_blur(lit, C(blur))
+    for _ in range(strength):
+        img.alpha_composite(halo)
+    img.alpha_composite(lit)
+
+
+def fitted(text, width=None, height=None):
+    probe = ImageFont.truetype(str(FONT), 1000)
+    x0, y0, x1, y1 = probe.getbbox(text)
+    scale = min(C(width) / (x1 - x0) if width else 1e9, C(height) / (y1 - y0) if height else 1e9)
+    return ImageFont.truetype(str(FONT), int(1000 * scale))
+
+
+def centered_text(draw, text, font, fill, cx=0.5, cy=0.5, **kwargs):
+    """Draws text with the centre of its visible ink at (cx, cy); returns the origin used."""
+    x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font, stroke_width=kwargs.get("stroke_width", 0))
+    origin = (C(cx) - (x0 + x1) / 2, C(cy) - (y0 + y1) / 2)
+    draw.text(origin, text, font=font, fill=fill, **kwargs)
+    return origin
 
 
 def circle(draw, cx, cy, r, **kwargs):
-    draw.ellipse((cx - r, cy - r, cx + r, cy + r), **kwargs)
+    draw.ellipse((C(cx - r), C(cy - r), C(cx + r), C(cy + r)), **kwargs)
+
+
+def m1():
+    """The app icon: glowing Fraktur M."""
+    img = canvas(INK)
+    font = fitted("M", width=0.6, height=0.56)
+    glow(img, lambda d: centered_text(d, "M", font, GLOW), blur=0.03, strength=2)
+    return img
+
+
+def m7():
+    """Alternate: the M as a glowing orange outline."""
+    img = canvas(INK)
+    font = fitted("M", width=0.6, height=0.56)
+    glow(img, lambda d: centered_text(d, "M", font, INK, stroke_width=int(C(0.008)), stroke_fill=GLOW),
+         blur=0.025, strength=2)
+    return img
+
+
+def m9():
+    """Alternate: a smaller M inside a faint ring."""
+    img = canvas(INK)
+    d = ImageDraw.Draw(img)
+    circle(d, 0.5, 0.5, 0.36, outline=(90, 50, 36), width=int(C(0.004)))
+    circle(d, 0.5, 0.5, 0.33, outline=(60, 36, 28), width=int(C(0.002)))
+    font = fitted("M", width=0.42, height=0.4)
+    glow(img, lambda d: centered_text(d, "M", font, GLOW), blur=0.03, strength=2)
+    return img
+
+
+def m10():
+    """Alternate: an illuminated manuscript initial."""
+    img = canvas(PARCHMENT)
+    d = ImageDraw.Draw(img)
+    d.rectangle((C(0.2), C(0.2), C(0.8), C(0.8)), fill=VERMILION)
+    for inset, width in ((0.2, 0.008), (0.225, 0.003)):
+        d.rectangle((C(inset), C(inset), C(1 - inset), C(1 - inset)), outline=GOLD, width=int(C(width)))
+    for x, y in ((0.2, 0.2), (0.8, 0.2), (0.2, 0.8), (0.8, 0.8)):
+        circle(d, x, y, 0.022, fill=GOLD)
+        circle(d, x, y, 0.009, fill=VERMILION)
+    centered_text(d, "M", fitted("M", width=0.4, height=0.38), PARCHMENT)
+    return img
+
+
+def t8():
+    """Alternate: the full wordmark on parchment with a red capital."""
+    img = canvas(PARCHMENT)
+    d = ImageDraw.Draw(img)
+    font = fitted("Moth", width=0.72)
+    x, y = centered_text(d, "Moth", font, SEPIA)
+    d.text((x, y), "M", font=font, fill=VERMILION)
+    return img
+
+
+def export(img, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.convert("RGB").resize((SIZE, SIZE), Image.LANCZOS).save(path, optimize=True)
+    print(f"wrote {path.relative_to(ROOT)}")
 
 
 def main():
-    icon = vertical_gradient(INK_TOP, INK_BOTTOM).convert("RGBA")
-    cx, cy = W * 0.5, W * 0.54
-    disc_r = W * 0.355
-
-    # Soft drop shadow under the record.
-    shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    circle(ImageDraw.Draw(shadow), cx, cy + W * 0.02, disc_r, fill=(0, 0, 0, 150))
-    icon.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(W * 0.03)))
-
-    d = ImageDraw.Draw(icon)
-    circle(d, cx, cy, disc_r, fill=DISC, outline=RIM, width=int(W * 0.006))
-    for frac in (0.92, 0.82, 0.72, 0.62):
-        circle(d, cx, cy, disc_r * frac, outline=GROOVE, width=int(W * 0.004))
-
-    # Centre label and spindle hole: the "0" in Noll.
-    circle(d, cx, cy, disc_r * 0.40, fill=ACCENT)
-    circle(d, cx, cy, disc_r * 0.075, fill=INK_BOTTOM)
-
-    # Bookmark ribbon hanging from the top edge, notched at the bottom.
-    rw = W * 0.14
-    rx = W * 0.6
-    ry_bottom = W * 0.40
-    notch = W * 0.06
-    ribbon = [
-        (rx, -10),
-        (rx + rw, -10),
-        (rx + rw, ry_bottom),
-        (rx + rw / 2, ry_bottom - notch),
-        (rx, ry_bottom),
-    ]
-    ribbon_shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    ImageDraw.Draw(ribbon_shadow).polygon([(x + W * 0.012, y + W * 0.012) for x, y in ribbon], fill=(0, 0, 0, 140))
-    icon.alpha_composite(ribbon_shadow.filter(ImageFilter.GaussianBlur(W * 0.012)))
-    ImageDraw.Draw(icon).polygon(ribbon, fill=CREAM)
-
-    out = Path(__file__).resolve().parent.parent / "Noll/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
-    icon.convert("RGB").resize((SIZE, SIZE), Image.LANCZOS).save(out, optimize=True)
-    print(f"wrote {out}")
+    icon = m1()
+    export(icon, ROOT / "Moth/Assets.xcassets/AppIcon.appiconset/AppIcon.png")
+    export(icon, ROOT / "Design/Icons/M1-app-icon.png")
+    for name, render in (("M7-outline", m7), ("M9-ring", m9), ("M10-illuminated", m10), ("T8-wordmark", t8)):
+        export(render(), ROOT / f"Design/Icons/alternates/{name}.png")
 
 
 if __name__ == "__main__":

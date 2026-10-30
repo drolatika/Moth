@@ -18,10 +18,10 @@ struct Theme: Identifiable, Equatable {
     }
 
     static let all: [Theme] = [
-        Theme(id: "noll", name: "Noll",
-              background: Color(hex: 0x111014), surface: Color(hex: 0x1D1C22),
+        Theme(id: "moth", name: "Moth",
+              background: Color(hex: 0x0A0A0C), surface: Color(hex: 0x18171C),
               text: Color(hex: 0xF4EFE6), secondaryText: Color(hex: 0x8F8A97),
-              accent: Color(hex: 0xFF5A36), onAccent: Color(hex: 0x111014), isDark: true),
+              accent: Color(hex: 0xFF784A), onAccent: Color(hex: 0x0A0A0C), isDark: true),
         Theme(id: "paper", name: "Paper",
               background: Color(hex: 0xF7F3EA), surface: Color(hex: 0xFFFFFF),
               text: Color(hex: 0x1E1B16), secondaryText: Color(hex: 0x7A7266),

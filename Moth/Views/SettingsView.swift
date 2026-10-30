@@ -43,7 +43,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             step(1, "Open an album, track or playlist in Spotify, Apple Music, Bandcamp, SoundCloud, YouTube Music, Tidal or Deezer.")
                             step(2, "Tap Share. In Spotify use “More”; in Apple Music it's in the ••• menu.")
-                            step(3, "Pick Noll. If it's not there, scroll the app row to the end, tap More, and add it to Favorites.")
+                            step(3, "Pick Moth. If it's not there, scroll the app row to the end, tap More, and add it to Favorites.")
                         }
                         .padding(14)
                         .background(theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))

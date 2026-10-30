@@ -72,7 +72,7 @@ struct LibraryView: View {
             }
             .scrollDismissesKeyboard(.immediately)
             .background(theme.background.ignoresSafeArea())
-            .navigationTitle("Noll")
+            .navigationTitle("Moth")
             .toolbarBackground(theme.background, for: .navigationBar)
             .searchable(text: $searchText, prompt: "Search albums & artists")
             .toolbar {
@@ -284,7 +284,7 @@ private struct EmptyShelfView: View {
     private var message: String {
         if isFiltering { return "Try a different search or platform." }
         return shelf == .queue
-            ? "In Spotify, Apple Music, Bandcamp or anywhere else, tap Share and pick Noll. The album lands here with its artwork."
+            ? "In Spotify, Apple Music, Bandcamp or anywhere else, tap Share and pick Moth. The album lands here with its artwork."
             : "Long-press an album and choose Mark as Listened, or turn on auto-marking in settings."
     }
 }

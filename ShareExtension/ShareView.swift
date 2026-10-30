@@ -8,7 +8,7 @@ struct ShareView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Noll")
+                Text("Moth")
                     .font(.headline)
                     .foregroundStyle(theme.text)
                 Spacer()

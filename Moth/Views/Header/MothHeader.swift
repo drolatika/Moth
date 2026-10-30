@@ -48,7 +48,8 @@ struct MothHeader: View {
                         progress: progress,
                         time: t,
                         titleCenter: CGPoint(x: 96, y: Self.titleRowY + 37),
-                        lanternCenter: CGPoint(x: lanternOrigin.x + 28, y: lanternOrigin.y + 28.5)
+                        lanternCenter: CGPoint(x: lanternOrigin.x + 28, y: lanternOrigin.y + 28.5),
+                        onDark: theme.isDark
                     )
                     .frame(width: width, height: Self.height)
                 }

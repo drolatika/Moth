@@ -84,6 +84,13 @@ struct ThemeBackdrop: View {
                     .resizable()
                     .scaledToFill()
                     .accessibilityHidden(true)
+                // A soft veil behind the header keeps the art from crowding the title.
+                LinearGradient(
+                    stops: [.init(color: theme.background.opacity(0.6), location: 0),
+                            .init(color: theme.background.opacity(0.45), location: 0.14),
+                            .init(color: theme.background.opacity(0), location: 0.3)],
+                    startPoint: .top, endPoint: .bottom
+                )
             }
         }
         .ignoresSafeArea()

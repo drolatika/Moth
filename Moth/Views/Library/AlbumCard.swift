@@ -37,6 +37,7 @@ struct AlbumCard: View {
                 }
                 .padding(.top, 2)
             }
+            .modifier(BackdropLabel())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -70,11 +71,31 @@ struct AlbumRow: View {
                     }
                 }
             }
+            .modifier(BackdropLabel())
             Spacer(minLength: 0)
             if let selected { SelectionMark(on: selected) }
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+    }
+}
+
+/// On themes with background artwork, sets text on a soft label of the page colour
+/// so it stays readable over the art. Does nothing on plain themes.
+struct BackdropLabel: ViewModifier {
+    @Environment(\.theme) private var theme
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if theme.backdrop != nil {
+            content
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(theme.background.opacity(0.88), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, -6)
+        } else {
+            content
+        }
     }
 }
 

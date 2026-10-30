@@ -8,13 +8,21 @@ struct MothSwarm: View {
     let time: Double
     let titleCenter: CGPoint
     let lanternCenter: CGPoint
+    /// Glowing cream moths on dark themes; sepia ink moths on light ones.
+    var onDark = true
 
     static let count = 5
 
     var body: some View {
         Canvas { context, _ in
-            context.addFilter(.shadow(color: Color(hex: 0xFF9A5A).opacity(0.9), radius: 2.5))
-            context.addFilter(.shadow(color: Manuscript.ember.opacity(0.45), radius: 7))
+            if onDark {
+                context.addFilter(.shadow(color: Color(hex: 0xFF9A5A).opacity(0.9), radius: 2.5))
+                context.addFilter(.shadow(color: Manuscript.ember.opacity(0.45), radius: 7))
+            } else {
+                context.addFilter(.shadow(color: Manuscript.oxblood.opacity(0.35), radius: 2))
+            }
+            let fill = onDark ? Manuscript.mothCream : Color(hex: 0x4A3826)
+            let line = onDark ? Manuscript.mothLine : Color(hex: 0x2A1E14)
             for i in 0..<Self.count {
                 let here = position(i, progress, time)
                 let ahead = position(i, progress, time + 0.03)
@@ -26,7 +34,7 @@ struct MothSwarm: View {
                 moth.translateBy(x: here.x, y: here.y)
                 moth.rotate(by: .radians(heading))
                 moth.scaleBy(x: scale, y: scale)
-                Self.drawMoth(in: &moth, flap: flap)
+                Self.drawMoth(in: &moth, flap: flap, fill: fill, line: line)
             }
         }
         .allowsHitTesting(false)
@@ -96,14 +104,14 @@ struct MothSwarm: View {
 
     private static let thorax = Path(ellipseIn: CGRect(x: -1.3, y: -3.2, width: 2.6, height: 8.4))
 
-    private static func drawMoth(in context: inout GraphicsContext, flap: Double) {
+    private static func drawMoth(in context: inout GraphicsContext, flap: Double, fill: Color, line: Color) {
         var wings = context
         wings.scaleBy(x: flap, y: 1)
         for path in [foreWings, hindWings] {
-            wings.fill(path, with: .color(Manuscript.mothCream))
-            wings.stroke(path, with: .color(Manuscript.mothLine), style: StrokeStyle(lineWidth: 0.7, lineJoin: .round))
+            wings.fill(path, with: .color(fill))
+            wings.stroke(path, with: .color(line), style: StrokeStyle(lineWidth: 0.7, lineJoin: .round))
         }
-        context.fill(thorax, with: .color(Manuscript.mothCream))
-        context.stroke(antennae, with: .color(Manuscript.mothCream), lineWidth: 0.6)
+        context.fill(thorax, with: .color(fill))
+        context.stroke(antennae, with: .color(fill), lineWidth: 0.6)
     }
 }

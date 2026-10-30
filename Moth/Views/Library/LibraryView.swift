@@ -39,6 +39,8 @@ struct LibraryView: View {
     @Environment(Connections.self) private var connections
     @Environment(\.theme) private var theme
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkHeard = false
+    @AppStorage(SettingsKey.openLinksIn, store: AppGroup.defaults) private var openLinksIn = LinkDestination.app.rawValue
     @AppStorage(SettingsKey.libraryLayout, store: AppGroup.defaults) private var layoutRaw = LibraryLayout.grid.rawValue
     @AppStorage(SettingsKey.libraryGrouping, store: AppGroup.defaults) private var groupingRaw = LibraryGrouping.newest.rawValue
 
@@ -50,11 +52,10 @@ struct LibraryView: View {
     @State private var selecting = false
     @State private var selection: Set<UUID> = []
     @State private var draggingCard = false
-    @State private var openItem: SavedItem?
+    @State private var expandedID: UUID?
+    @State private var browserLink: BrowserLink?
     @State private var searchVisible = false
     @FocusState private var searchFocused: Bool
-
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     private var currentShelf: Shelf { progress < 0.5 ? .queue : .heard }
     private var layout: LibraryLayout { LibraryLayout(rawValue: layoutRaw) ?? .grid }
@@ -92,21 +93,7 @@ struct LibraryView: View {
         }
         .background { ThemeBackdrop() }
         .overlay(alignment: .bottom) { bottomBar }
-        .sheet(item: $openItem) { item in
-            AlbumDetailView(itemID: item.id, onSelect: { selected in
-                selecting = true
-                selection = [selected.id]
-            })
-            .environment(store)
-            .themed(theme)
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(isPresented: $showingAdd) {
-            AddLinkView().environment(store).themed(theme)
-        }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView().environment(store).environment(connections).themed(theme)
-        }
+        .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { store.reload() }
         }
@@ -158,12 +145,29 @@ struct LibraryView: View {
                                 .padding(.top, 6)
                         }
                         if layout == .grid {
-                            LazyVGrid(columns: columns, spacing: 22) {
-                                ForEach(section.items) { item in cell(item, on: shelf) }
+                            LazyVStack(spacing: 22) {
+                                ForEach(pairs(section.items), id: \.first?.id) { pair in
+                                    VStack(spacing: 16) {
+                                        HStack(alignment: .top, spacing: 14) {
+                                            ForEach(pair) { item in
+                                                cell(item, on: shelf).frame(maxWidth: .infinity)
+                                            }
+                                            if pair.count == 1 { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                                        }
+                                        if let open = pair.first(where: { $0.id == expandedID }) {
+                                            panel(open, notchX: open.id == pair.first?.id ? 0.25 : 0.75)
+                                        }
+                                    }
+                                }
                             }
                         } else {
                             LazyVStack(spacing: 12) {
-                                ForEach(section.items) { item in cell(item, on: shelf) }
+                                ForEach(section.items) { item in
+                                    VStack(spacing: 14) {
+                                        cell(item, on: shelf)
+                                        if item.id == expandedID { panel(item, notchX: 0.09) }
+                                    }
+                                }
                             }
                         }
                     }
@@ -180,6 +184,30 @@ struct LibraryView: View {
         } action: { _, pulled in
             revealOrHideSearch(scrollY: pulled)
         }
+    }
+
+    private func pairs(_ items: [SavedItem]) -> [[SavedItem]] {
+        stride(from: 0, to: items.count, by: 2).map { Array(items[$0..<min($0 + 2, items.count)]) }
+    }
+
+    private func panel(_ item: SavedItem, notchX: CGFloat) -> some View {
+        AlbumTracksPanel(
+            item: item,
+            notchX: notchX,
+            onListen: { url, album in listen(url, platform: item.platform, album: album) },
+            onSelect: {
+                withAnimation(.snappy) { expandedID = nil }
+                selecting = true
+                selection = [item.id]
+            },
+            onRemove: {
+                withAnimation(.snappy) {
+                    expandedID = nil
+                    store.delete(item)
+                }
+            }
+        )
+        .transition(AnyTransition.modifier(active: RevealFromTop(progress: 0), identity: RevealFromTop(progress: 1)))
     }
 
     private struct ShelfSection: Identifiable {
@@ -221,8 +249,17 @@ struct LibraryView: View {
             ThrowableCard(
                 direction: shelf == .queue ? 1 : -1,
                 isDragging: $draggingCard,
-                onThrow: { withAnimation(.snappy) { store.setListened(item, shelf == .queue) } },
-                onTap: { openItem = item }
+                onThrow: {
+                    withAnimation(.snappy) {
+                        if expandedID == item.id { expandedID = nil }
+                        store.setListened(item, shelf == .queue)
+                    }
+                },
+                onTap: {
+                    withAnimation(.spring(response: 0.45, dampingFraction: 0.86)) {
+                        expandedID = expandedID == item.id ? nil : item.id
+                    }
+                }
             ) {
                 if layout == .grid {
                     AlbumCard(item: item)
@@ -327,6 +364,18 @@ struct LibraryView: View {
     }
 
     // MARK: Actions
+
+    private func listen(_ url: URL, platform: Platform, album: SavedItem?) {
+        if LinkDestination(rawValue: openLinksIn) == .browser {
+            browserLink = BrowserLink(url: url)
+        } else {
+            URLOpener.open(url, platform: platform)
+        }
+        if let album, autoMarkHeard, !album.isListened {
+            // Let the app switch happen before the album moves to Heard.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { store.setListened(album, true) }
+        }
+    }
 
     private func toggle(_ item: SavedItem) {
         if selection.contains(item.id) { selection.remove(item.id) } else { selection.insert(item.id) }

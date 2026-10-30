@@ -88,42 +88,87 @@ enum AlbumDetailsService {
         return details
     }
 
-    // MARK: Bandcamp (schema.org JSON-LD embedded in every album and track page)
+    // MARK: Bandcamp
 
+    /// Bandcamp pages carry the player's data in a `data-tralbum` attribute (track
+    /// titles, lengths, links, release date, credits) and schema.org JSON-LD
+    /// (label, and a second source for everything else).
     private static func bandcamp(_ url: URL) async throws -> AlbumDetails? {
         let html = try await page(url)
-        guard let range = html.range(of: #"(?s)<script type="application/ld\+json">\s*(\{.*?\})\s*</script>"#, options: [.regularExpression]),
-              let start = html[range].firstIndex(of: "{"),
-              let end = html[range].lastIndex(of: "}"),
-              let data = String(html[range][start...end]).data(using: .utf8),
-              let ld = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let ld = bandcampJSONLD(html)
+        var details = bandcampTralbum(html, pageURL: url) ?? AlbumDetails()
+
+        if details.tracks.isEmpty, let ld { details.tracks = bandcampLDTracks(ld, pageURL: url) }
+        if let ld {
+            details.label = details.label
+                ?? ((ld["publisher"] as? [String: Any])?["name"] as? String)
+                ?? ((ld["recordLabel"] as? [String: Any])?["name"] as? String)
+            details.credits = details.credits ?? (ld["creditText"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            details.releaseDate = details.releaseDate ?? (ld["datePublished"] as? String).flatMap(parseBandcampDate)
+            details.copyright = details.copyright ?? ld["copyrightNotice"] as? String
+            if details.genre == nil, let keywords = ld["keywords"] as? [String], !keywords.isEmpty {
+                details.genre = keywords.prefix(3).joined(separator: ", ")
+            }
+        }
+        return details.tracks.isEmpty && details.credits == nil ? nil : details
+    }
+
+    private static func bandcampTralbum(_ html: String, pageURL: URL) -> AlbumDetails? {
+        guard let range = html.range(of: #"data-tralbum="[^"]*""#, options: .regularExpression) else { return nil }
+        var raw = String(html[range])
+        raw.removeFirst("data-tralbum=\"".count)
+        raw.removeLast()
+        guard let data = MetadataFetcher.decodeEntities(raw).data(using: .utf8),
+              let tralbum = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
 
         var details = AlbumDetails()
-        details.credits = (ld["creditText"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        details.label = ((ld["publisher"] as? [String: Any])?["name"] as? String)
-            ?? ((ld["recordLabel"] as? [String: Any])?["name"] as? String)
-        details.copyright = ld["copyrightNotice"] as? String
-        details.releaseDate = (ld["datePublished"] as? String).flatMap(parseBandcampDate)
-        if let keywords = ld["keywords"] as? [String] {
-            details.genre = keywords.prefix(3).joined(separator: ", ")
-        }
-        let artist = (ld["byArtist"] as? [String: Any])?["name"] as? String
-        let elements = ((ld["track"] as? [String: Any])?["itemListElement"] as? [[String: Any]]) ?? []
-        if elements.isEmpty, let name = ld["name"] as? String {
-            // A single track page.
-            details.tracks = [AlbumDetails.Track(id: url.absoluteString, number: nil, disc: nil, title: name, artist: artist,
-                                                 durationMs: (ld["duration"] as? String).flatMap(parseISODuration), url: url)]
-        } else {
-            details.tracks = elements.compactMap { element in
-                guard let track = element["item"] as? [String: Any], let name = track["name"] as? String else { return nil }
-                let link = (track["@id"] as? String).flatMap(URL.init(string:))
-                return AlbumDetails.Track(id: link?.absoluteString ?? name, number: element["position"] as? Int, disc: nil,
-                                          title: name, artist: nil,
-                                          durationMs: (track["duration"] as? String).flatMap(parseISODuration), url: link)
-            }
+        let current = tralbum["current"] as? [String: Any] ?? [:]
+        let albumArtist = tralbum["artist"] as? String
+        details.credits = (current["credits"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        details.releaseDate = ((current["release_date"] as? String) ?? (tralbum["album_release_date"] as? String))
+            .flatMap(parseBandcampDate)
+        let tracks = tralbum["trackinfo"] as? [[String: Any]] ?? []
+        details.tracks = tracks.enumerated().compactMap { index, track in
+            guard let title = track["title"] as? String else { return nil }
+            let link = (track["title_link"] as? String).flatMap { URL(string: $0, relativeTo: pageURL)?.absoluteURL }
+            let seconds = (track["duration"] as? Double) ?? Double(track["duration"] as? Int ?? 0)
+            let artist = (track["artist"] as? String).flatMap { $0 == albumArtist ? nil : $0 }
+            return AlbumDetails.Track(
+                id: link?.absoluteString ?? String(track["track_id"] as? Int ?? index),
+                number: track["track_num"] as? Int ?? index + 1,
+                disc: nil,
+                title: title,
+                artist: artist,
+                durationMs: seconds > 0 ? Int(seconds * 1000) : nil,
+                url: link
+            )
         }
         return details
+    }
+
+    private static func bandcampJSONLD(_ html: String) -> [String: Any]? {
+        guard let range = html.range(of: #"(?s)<script type="application/ld\+json"[^>]*>\s*(\{.*?\})\s*</script>"#, options: .regularExpression),
+              let start = html[range].firstIndex(of: "{"),
+              let end = html[range].lastIndex(of: "}"),
+              let data = String(html[range][start...end]).data(using: .utf8)
+        else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private static func bandcampLDTracks(_ ld: [String: Any], pageURL: URL) -> [AlbumDetails.Track] {
+        let elements = ((ld["track"] as? [String: Any])?["itemListElement"] as? [[String: Any]]) ?? []
+        if elements.isEmpty, let name = ld["name"] as? String {
+            return [AlbumDetails.Track(id: pageURL.absoluteString, number: nil, disc: nil, title: name, artist: nil,
+                                       durationMs: (ld["duration"] as? String).flatMap(parseISODuration), url: pageURL)]
+        }
+        return elements.compactMap { element in
+            guard let track = element["item"] as? [String: Any], let name = track["name"] as? String else { return nil }
+            let link = (track["@id"] as? String).flatMap(URL.init(string:))
+            return AlbumDetails.Track(id: link?.absoluteString ?? name, number: element["position"] as? Int, disc: nil,
+                                      title: name, artist: nil,
+                                      durationMs: (track["duration"] as? String).flatMap(parseISODuration), url: link)
+        }
     }
 
     // MARK: Deezer
@@ -282,4 +327,8 @@ enum AlbumDetailsService {
         }
         return total > 0 ? Int(total * 1000) : nil
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -7,11 +7,14 @@ struct AlbumTracksPanel: View {
     let item: SavedItem
     /// Where the album sits above, 0…1 across the panel, for the notch.
     let notchX: CGFloat
+    /// Current search text; matching tracks are highlighted.
+    var highlight: String = ""
     let onListen: (URL, _ album: SavedItem?) -> Void
     let onSelect: () -> Void
     let onRemove: () -> Void
 
     @Environment(ItemStore.self) private var store
+    @Environment(TrackIndex.self) private var trackIndex
     @Environment(\.theme) private var theme
 
     @State private var details: AlbumDetails?
@@ -30,6 +33,7 @@ struct AlbumTracksPanel: View {
         .task(id: item.id) {
             loading = true
             details = await AlbumDetailsService.details(for: item)
+            if let details { trackIndex.update(item.id, with: details) }
             loading = false
         }
     }
@@ -112,8 +116,8 @@ struct AlbumTracksPanel: View {
                 .frame(width: 22, alignment: .trailing)
             VStack(alignment: .leading, spacing: 1) {
                 Text(track.title)
-                    .font(.subheadline)
-                    .foregroundStyle(heard ? theme.secondaryText : theme.text)
+                    .font(.subheadline.weight(matches(track) ? .semibold : .regular))
+                    .foregroundStyle(heard ? theme.secondaryText : matches(track) ? theme.accent : theme.text)
                     .strikethrough(heard, pattern: .solid, color: theme.accent.opacity(0.75))
                     .lineLimit(2)
                 if let artist = track.artist, !artist.isEmpty, artist != item.artist {
@@ -141,6 +145,10 @@ struct AlbumTracksPanel: View {
                     : Label("Mark Heard", systemImage: "checkmark.circle")
             }
         }
+    }
+
+    private func matches(_ track: AlbumDetails.Track) -> Bool {
+        !highlight.isEmpty && track.title.localizedCaseInsensitiveContains(highlight)
     }
 
     // MARK: Credits

@@ -34,6 +34,7 @@ struct LanternView: View {
             .allowsHitTesting(false)
         }
         .shadow(color: Manuscript.ember.opacity(lit > 0 ? 0.3 + 0.45 * min(1, k) : 0), radius: 6 + 14 * k)
+        .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 

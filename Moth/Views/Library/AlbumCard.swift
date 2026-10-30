@@ -4,6 +4,8 @@ struct AlbumCard: View {
     let item: SavedItem
     /// nil outside select mode; otherwise whether this card is selected.
     var selected: Bool? = nil
+    /// A track on this album that matched the search.
+    var matchedTrack: String? = nil
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -25,6 +27,12 @@ struct AlbumCard: View {
                     Text(artist)
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                }
+                if let matchedTrack {
+                    Text("♪ \(matchedTrack)")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(theme.accent)
                         .lineLimit(1)
                 }
                 HStack(spacing: 6) {
@@ -53,6 +61,7 @@ struct AlbumCard: View {
 struct AlbumRow: View {
     let item: SavedItem
     var selected: Bool? = nil
+    var matchedTrack: String? = nil
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -68,6 +77,9 @@ struct AlbumRow: View {
                     .lineLimit(1)
                 if let artist = item.artist {
                     Text(artist).font(.footnote).foregroundStyle(theme.secondaryText).lineLimit(1)
+                }
+                if let matchedTrack {
+                    Text("♪ \(matchedTrack)").font(.caption.weight(.medium)).foregroundStyle(theme.accent).lineLimit(1)
                 }
                 HStack(spacing: 6) {
                     PlatformBadge(platform: item.platform, seed: item.id.hashValue)

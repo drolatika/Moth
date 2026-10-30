@@ -293,6 +293,11 @@ enum AlbumDetailsService {
         }
     }
 
+    /// Whatever is cached for this item, however old.
+    static func cachedDetails(for id: UUID) -> AlbumDetails? {
+        cache(for: id)
+    }
+
     static func forget(_ id: UUID) {
         try? FileManager.default.removeItem(at: cacheDirectory.appendingPathComponent("\(id.uuidString).json"))
     }

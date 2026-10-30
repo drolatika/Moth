@@ -37,6 +37,7 @@ enum LinkDestination: String, CaseIterable, Identifiable {
 struct LibraryView: View {
     @Environment(ItemStore.self) private var store
     @Environment(Connections.self) private var connections
+    @Environment(TrackIndex.self) private var trackIndex
     @Environment(\.theme) private var theme
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkHeard = false
@@ -58,6 +59,16 @@ struct LibraryView: View {
     @FocusState private var searchFocused: Bool
 
     private var currentShelf: Shelf { progress < 0.5 ? .queue : .heard }
+    private var query: String { searchText.trimmingCharacters(in: .whitespaces) }
+
+    /// The track that made this album match the search, when it wasn't the album itself.
+    private func matchedTrack(for item: SavedItem) -> String? {
+        guard !query.isEmpty,
+              !item.title.localizedCaseInsensitiveContains(query),
+              !(item.artist?.localizedCaseInsensitiveContains(query) ?? false)
+        else { return nil }
+        return trackIndex.matchingTrack(in: item, query: query)
+    }
     private var layout: LibraryLayout { LibraryLayout(rawValue: layoutRaw) ?? .grid }
     private var grouping: LibraryGrouping { LibraryGrouping(rawValue: groupingRaw) ?? .newest }
 
@@ -67,7 +78,8 @@ struct LibraryView: View {
             (shelf == .queue ? !item.isListened : item.isListened || item.isPartlyHeard)
                 && (query.isEmpty
                     || item.title.localizedCaseInsensitiveContains(query)
-                    || (item.artist?.localizedCaseInsensitiveContains(query) ?? false))
+                    || (item.artist?.localizedCaseInsensitiveContains(query) ?? false)
+                    || trackIndex.matchingTrack(in: item, query: query) != nil)
         }
     }
 
@@ -95,8 +107,13 @@ struct LibraryView: View {
         .overlay(alignment: .bottom) { bottomBar }
         .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.reload() }
+            if phase == .active {
+                store.reload()
+                trackIndex.refresh(store.items)
+            }
         }
+        .onChange(of: store.items.count) { _, _ in trackIndex.refresh(store.items) }
+        .onAppear { trackIndex.refresh(store.items) }
         .onChange(of: currentShelf) { _, _ in
             if selecting { endSelecting() }
         }
@@ -194,6 +211,7 @@ struct LibraryView: View {
         AlbumTracksPanel(
             item: item,
             notchX: notchX,
+            highlight: query,
             onListen: { url, album in listen(url, platform: item.platform, album: album) },
             onSelect: {
                 withAnimation(.snappy) { expandedID = nil }
@@ -239,9 +257,9 @@ struct LibraryView: View {
         if selecting {
             Button { toggle(item) } label: {
                 if layout == .grid {
-                    AlbumCard(item: item, selected: selection.contains(item.id))
+                    AlbumCard(item: item, selected: selection.contains(item.id), matchedTrack: matchedTrack(for: item))
                 } else {
-                    AlbumRow(item: item, selected: selection.contains(item.id))
+                    AlbumRow(item: item, selected: selection.contains(item.id), matchedTrack: matchedTrack(for: item))
                 }
             }
             .buttonStyle(PressableStyle())
@@ -262,9 +280,9 @@ struct LibraryView: View {
                 }
             ) {
                 if layout == .grid {
-                    AlbumCard(item: item)
+                    AlbumCard(item: item, matchedTrack: matchedTrack(for: item))
                 } else {
-                    AlbumRow(item: item)
+                    AlbumRow(item: item, matchedTrack: matchedTrack(for: item))
                 }
             }
         }

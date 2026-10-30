@@ -26,33 +26,37 @@ struct MothHeader: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { timeline in
-            let t = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
-            GeometryReader { geo in
-                let width = geo.size.width
-                // The lantern's base (y 62.5 of 64) sits on the bottom edge of the initial's box.
-                let lanternOrigin = CGPoint(x: width - 16 - 60, y: Self.titleRowY + Self.titleRowHeight - 62.5)
-                ZStack(alignment: .topLeading) {
-                    topBar
-                        .frame(width: width - 32, height: Self.topBarHeight)
-                        .offset(x: 16)
+        GeometryReader { geo in
+            let width = geo.size.width
+            // The lantern's base (y 62.5 of 64) sits on the bottom edge of the initial's box.
+            let lanternOrigin = CGPoint(x: width - 16 - 60, y: Self.titleRowY + Self.titleRowHeight - 62.5)
+            ZStack(alignment: .topLeading) {
+                titles
+                    .frame(height: Self.titleRowHeight, alignment: .bottomLeading)
+                    .offset(x: 20, y: Self.titleRowY)
 
-                    titles
-                        .frame(height: Self.titleRowHeight, alignment: .bottomLeading)
-                        .offset(x: 20, y: Self.titleRowY)
-
-                    LanternView(lit: lanternLevel, time: t)
-                        .offset(x: lanternOrigin.x, y: lanternOrigin.y)
-
-                    MothSwarm(
-                        progress: progress,
-                        time: t,
-                        titleCenter: CGPoint(x: 96, y: Self.titleRowY + 37),
-                        lanternCenter: CGPoint(x: lanternOrigin.x + 28, y: lanternOrigin.y + 28.5),
-                        onDark: theme.isDark
-                    )
-                    .frame(width: width, height: Self.height)
+                // Only the lantern and moths animate, and they never take touches,
+                // so the buttons above always get the tap.
+                TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { timeline in
+                    let t = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
+                    ZStack(alignment: .topLeading) {
+                        LanternView(lit: lanternLevel, time: t)
+                            .offset(x: lanternOrigin.x, y: lanternOrigin.y)
+                        MothSwarm(
+                            progress: progress,
+                            time: t,
+                            titleCenter: CGPoint(x: 96, y: Self.titleRowY + 37),
+                            lanternCenter: CGPoint(x: lanternOrigin.x + 28, y: lanternOrigin.y + 28.5),
+                            onDark: theme.isDark
+                        )
+                        .frame(width: width, height: Self.height)
+                    }
                 }
+                .allowsHitTesting(false)
+
+                topBar
+                    .frame(width: width - 32, height: Self.topBarHeight)
+                    .offset(x: 16)
             }
         }
         .frame(height: Self.height)

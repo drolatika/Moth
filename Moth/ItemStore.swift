@@ -15,7 +15,10 @@ final class ItemStore {
     }
 
     func setListened(_ item: SavedItem, _ listened: Bool) {
-        update(item) { $0.listenedAt = listened ? .now : nil }
+        update(item) {
+            $0.listenedAt = listened ? .now : nil
+            if !listened { $0.heardTrackIDs = nil }
+        }
     }
 
     func delete(_ item: SavedItem) {
@@ -37,6 +40,7 @@ final class ItemStore {
         LibraryFile.mutate { items in
             for index in items.indices where ids.contains(items[index].id) {
                 items[index].listenedAt = listened ? .now : nil
+                if !listened { items[index].heardTrackIDs = nil }
             }
         }
         reload()

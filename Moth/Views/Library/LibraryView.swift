@@ -63,7 +63,7 @@ struct LibraryView: View {
     private func items(on shelf: Shelf) -> [SavedItem] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
         return store.items.filter { item in
-            (shelf == .queue ? !item.isListened : item.isListened)
+            (shelf == .queue ? !item.isListened : item.isListened || item.isPartlyHeard)
                 && (query.isEmpty
                     || item.title.localizedCaseInsensitiveContains(query)
                     || (item.artist?.localizedCaseInsensitiveContains(query) ?? false))
@@ -75,7 +75,7 @@ struct LibraryView: View {
             MothHeader(
                 progress: progress,
                 queueCount: store.items.filter { !$0.isListened }.count,
-                heardCount: store.items.filter(\.isListened).count,
+                heardCount: store.items.filter { $0.isListened || $0.isPartlyHeard }.count,
                 selection: selecting ? MothHeader.SelectionBar(
                     count: selection.count,
                     onCancel: endSelecting,

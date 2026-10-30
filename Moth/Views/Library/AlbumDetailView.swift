@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// The page an album opens to: artwork (tap to listen), the tracklist with soft
-/// lengths, and credits in small type at the bottom. Tapping a track opens its menu.
+/// lengths, and credits in small type at the bottom. Tapping a track opens its menu;
+/// heard tracks are struck through, and marking one adds the album to Heard too.
 struct AlbumDetailView: View {
     let itemID: UUID
     let onSelect: (SavedItem) -> Void
@@ -15,7 +16,6 @@ struct AlbumDetailView: View {
     @State private var details: AlbumDetails?
     @State private var loading = true
     @State private var browserLink: BrowserLink?
-    @State private var savedTrack: String?
 
     private var item: SavedItem? { store.items.first { $0.id == itemID } }
 
@@ -50,18 +50,6 @@ struct AlbumDetailView: View {
             loading = false
         }
         .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
-        .overlay(alignment: .bottom) {
-            if let savedTrack {
-                Text("Saved \u{201C}\(savedTrack)\u{201D} to the queue")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(theme.onAccent)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(theme.accent, in: Capsule())
-                    .padding(.bottom, 24)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
     }
 
     // MARK: Header
@@ -70,7 +58,7 @@ struct AlbumDetailView: View {
         VStack(spacing: 12) {
             Button { listen(item.url, platform: item.platform, album: item) } label: {
                 ArtworkView(item: item, cornerRadius: 14)
-                    .frame(width: 250, height: 250)
+                    .frame(width: 188, height: 188)
                     .shadow(color: .black.opacity(theme.isDark ? 0.5 : 0.2), radius: 22, y: 12)
             }
             .buttonStyle(PressableStyle())
@@ -175,11 +163,6 @@ struct AlbumDetailView: View {
                     ? Label("Mark Not Heard", systemImage: "circle")
                     : Label("Mark Heard", systemImage: "checkmark.circle")
             }
-            if let url = track.url {
-                Button { saveToQueue(url, title: track.title) } label: {
-                    Label("Save Track to Queue", systemImage: "plus.circle")
-                }
-            }
         } label: {
             HStack(spacing: 10) {
                 Text("\(track.number ?? index + 1)")
@@ -190,6 +173,7 @@ struct AlbumDetailView: View {
                     Text(track.title)
                         .font(.subheadline)
                         .foregroundStyle(heard ? theme.secondaryText : theme.text)
+                        .strikethrough(heard, pattern: .solid, color: theme.accent.opacity(0.75))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     if let artist = track.artist, !artist.isEmpty, artist != item.artist {
@@ -197,11 +181,6 @@ struct AlbumDetailView: View {
                     }
                 }
                 Spacer(minLength: 8)
-                if heard {
-                    Image(systemName: "checkmark")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(theme.accent.opacity(0.8))
-                }
                 if let ms = track.durationMs {
                     Text(Self.trackLength(ms))
                         .font(.caption.monospacedDigit())
@@ -266,17 +245,6 @@ struct AlbumDetailView: View {
         }
         if let album, autoMarkHeard, !album.isListened {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { store.setListened(album, true) }
-        }
-    }
-
-    private func saveToQueue(_ url: URL, title: String) {
-        Haptics.impact(.light)
-        Task {
-            _ = await LibrarySaver.save(url)
-            store.reload()
-            withAnimation(.snappy) { savedTrack = title }
-            try? await Task.sleep(for: .seconds(2))
-            withAnimation(.easeOut) { savedTrack = nil }
         }
     }
 

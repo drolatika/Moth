@@ -30,5 +30,8 @@ struct SavedItem: Identifiable, Codable, Hashable {
     var heardTrackIDs: [String]? = nil
 
     var isListened: Bool { listenedAt != nil }
+    /// Some tracks are marked heard but the album itself isn't.
+    var isPartlyHeard: Bool { !isListened && !(heardTrackIDs ?? []).isEmpty }
+    var heardTrackCount: Int { heardTrackIDs?.count ?? 0 }
     var linkKey: String { LinkCleaner.key(for: url) }
 }

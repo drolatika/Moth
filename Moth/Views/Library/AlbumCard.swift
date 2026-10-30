@@ -34,6 +34,11 @@ struct AlbumCard: View {
                             .font(.caption2)
                             .foregroundStyle(theme.secondaryText.opacity(0.8))
                     }
+                    if item.isPartlyHeard {
+                        Text("· \(item.heardTrackCount) heard")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(theme.accent.opacity(0.85))
+                    }
                 }
                 .padding(.top, 2)
             }
@@ -68,6 +73,9 @@ struct AlbumRow: View {
                     PlatformBadge(platform: item.platform)
                     if item.kind != .other {
                         Text("· \(item.kind.label)").font(.caption2).foregroundStyle(theme.secondaryText.opacity(0.8))
+                    }
+                    if item.isPartlyHeard {
+                        Text("· \(item.heardTrackCount) heard").font(.caption2.weight(.semibold)).foregroundStyle(theme.accent.opacity(0.85))
                     }
                 }
             }

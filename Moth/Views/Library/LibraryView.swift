@@ -105,6 +105,12 @@ struct LibraryView: View {
         }
         .background { ThemeBackdrop() }
         .overlay(alignment: .bottom) { bottomBar }
+        .sheet(isPresented: $showingAdd) {
+            AddLinkView().environment(store).themed(theme)
+        }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView().environment(store).environment(connections).themed(theme)
+        }
         .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

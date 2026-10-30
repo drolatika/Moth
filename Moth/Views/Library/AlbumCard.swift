@@ -56,80 +56,92 @@ struct AlbumCard: View {
     }
 }
 
-/// Press, hold for a moment, then flick: the album flies off toward the other page.
-/// A quick swipe without the hold still pages, and a longer still hold opens the menu.
+/// Press and hold still: the menu opens. Press, then move: the album lifts and
+/// follows your finger; flick it toward the other page to send it there.
+/// A plain swipe never triggers either, so the pages and the grid still scroll.
 struct ThrowableCard<Content: View>: View {
     /// +1 throws to the right (Queue → Heard), -1 to the left (Heard → Queue).
     let direction: CGFloat
     @Binding var isDragging: Bool
     let onThrow: () -> Void
+    let onHold: () -> Void
     @ViewBuilder let content: Content
 
-    private enum DragState: Equatable {
-        case idle, armed, dragging(CGSize)
-        var translation: CGSize {
-            if case .dragging(let t) = self { return t }
-            return .zero
-        }
-        var isActive: Bool { self != .idle }
-    }
-
-    @GestureState private var drag: DragState = .idle
-    @State private var flyOffset: CGSize = .zero
-    @State private var flying = false
+    @State private var armed = false
+    @State private var translation: CGSize = .zero
     @State private var thrown = false
+    @State private var menuShown = false
+    @State private var menuTimer: DispatchWorkItem?
 
     var body: some View {
-        let offset = flying ? flyOffset : drag.translation
         content
-            .scaleEffect(drag.isActive ? 1.05 : 1)
-            .rotationEffect(.degrees(Double(offset.width) / 14))
-            .offset(offset)
+            .scaleEffect(armed ? 1.05 : 1)
+            .rotationEffect(.degrees(Double(translation.width) / 14))
+            .offset(translation)
             .opacity(thrown ? 0.15 : 1)
-            .zIndex(drag.isActive || flying ? 10 : 0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: drag.isActive)
-            .simultaneousGesture(throwGesture)
-            .onChange(of: drag.isActive) { _, active in
-                isDragging = active
-                if active { Haptics.impact(.medium) }
-            }
+            .zIndex(armed || thrown ? 10 : 0)
+            .gesture(CardPressGesture(
+                onBegan: began,
+                onChanged: changed,
+                onEnded: ended,
+                onCancelled: { settle() }
+            ))
     }
 
-    private var throwGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.18)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
-            .updating($drag) { value, state, _ in
-                switch value {
-                case .first(true):
-                    state = .armed
-                case .second(true, let dragValue):
-                    state = dragValue.map { DragState.dragging($0.translation) } ?? .armed
-                default:
-                    state = .idle
-                }
-            }
-            .onEnded { value in
-                guard case .second(true, let dragValue?) = value else { return }
-                let distance = dragValue.translation.width * direction
-                let predicted = dragValue.predictedEndTranslation.width * direction
-                guard distance > 70 || predicted > 220 else { return }
-                throwAway(from: dragValue.translation)
-            }
+    private func began() {
+        menuShown = false
+        isDragging = true
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { armed = true }
+        Haptics.impact(.medium)
+        let timer = DispatchWorkItem {
+            menuShown = true
+            settle()
+            onHold()
+        }
+        menuTimer = timer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: timer)
+    }
+
+    private func changed(_ newTranslation: CGSize) {
+        guard !menuShown else { return }
+        if hypot(newTranslation.width, newTranslation.height) > 8 { menuTimer?.cancel() }
+        translation = newTranslation
+    }
+
+    private func ended(_ finalTranslation: CGSize, _ velocity: CGSize) {
+        menuTimer?.cancel()
+        guard !menuShown else { return }
+        let distance = finalTranslation.width * direction
+        let projected = (finalTranslation.width + velocity.width * 0.2) * direction
+        if distance > 70 || projected > 220 {
+            throwAway(from: finalTranslation)
+        } else {
+            settle()
+        }
+    }
+
+    private func settle() {
+        menuTimer?.cancel()
+        isDragging = false
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            armed = false
+            translation = .zero
+        }
     }
 
     private func throwAway(from start: CGSize) {
-        flyOffset = start
-        flying = true
+        isDragging = false
+        armed = false
         Haptics.impact(.rigid)
+        translation = start
         withAnimation(.easeIn(duration: 0.28)) {
-            flyOffset = CGSize(width: direction * 520, height: start.height - 120)
+            translation = CGSize(width: direction * 520, height: start.height - 120)
             thrown = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             onThrow()
-            flying = false
             thrown = false
-            flyOffset = .zero
+            translation = .zero
         }
     }
 }

@@ -120,6 +120,12 @@ struct ThemeSwatch: View {
         VStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(option.background)
+                .overlay {
+                    if let backdrop = option.backdrop {
+                        Image(backdrop).resizable().scaledToFill()
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .frame(height: 88)
                 .overlay(alignment: .topLeading) {
                     VStack(alignment: .leading, spacing: 6) {

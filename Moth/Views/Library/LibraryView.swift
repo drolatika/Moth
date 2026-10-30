@@ -30,6 +30,7 @@ struct LibraryView: View {
     @State private var selection: Set<UUID> = []
     @State private var draggingCard = false
     @State private var browserLink: BrowserLink?
+    @State private var heldItem: SavedItem?
     @FocusState private var searchFocused: Bool
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
@@ -62,8 +63,27 @@ struct LibraryView: View {
             )
             pager
         }
-        .background(theme.background.ignoresSafeArea())
+        .background { ThemeBackdrop() }
         .overlay(alignment: .bottom) { bottomBar }
+        .overlay {
+            if let item = heldItem {
+                HoldMenu(
+                    item: item,
+                    onListen: { dismissMenu(); open(item) },
+                    onSelect: {
+                        dismissMenu()
+                        selecting = true
+                        selection = [item.id]
+                    },
+                    onRemove: {
+                        dismissMenu()
+                        withAnimation(.snappy) { store.delete(item) }
+                    },
+                    onDismiss: dismissMenu
+                )
+                .transition(.opacity)
+            }
+        }
         .sheet(isPresented: $showingAdd) {
             AddLinkView().environment(store).themed(theme)
         }
@@ -89,13 +109,6 @@ struct LibraryView: View {
                         shelfPage(shelf)
                             .frame(width: geo.size.width, height: geo.size.height)
                             .id(shelf)
-                            .background {
-                                if shelf == .queue {
-                                    GeometryReader { pageGeo in
-                                        Color.clear.preference(key: PagerOffsetKey.self, value: pageGeo.frame(in: .named("pager")).minX)
-                                    }
-                                }
-                            }
                     }
                 }
                 .scrollTargetLayout()
@@ -104,9 +117,10 @@ struct LibraryView: View {
             .scrollIndicators(.hidden)
             .scrollPosition(id: $page)
             .scrollDisabled(draggingCard)
-            .coordinateSpace(name: "pager")
-            .onPreferenceChange(PagerOffsetKey.self) { minX in
-                progress = min(1, max(0, -minX / max(geo.size.width, 1)))
+            .onScrollGeometryChange(for: Double.self) { scroll in
+                scroll.contentOffset.x / max(scroll.containerSize.width, 1)
+            } action: { _, offset in
+                progress = min(1, max(0, offset))
             }
         }
     }
@@ -141,31 +155,15 @@ struct LibraryView: View {
             }
             .buttonStyle(PressableStyle())
         } else {
-            ThrowableCard(direction: shelf == .queue ? 1 : -1, isDragging: $draggingCard, onThrow: {
-                withAnimation(.snappy) { store.setListened(item, shelf == .queue) }
-            }) {
+            ThrowableCard(
+                direction: shelf == .queue ? 1 : -1,
+                isDragging: $draggingCard,
+                onThrow: { withAnimation(.snappy) { store.setListened(item, shelf == .queue) } },
+                onHold: { withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { heldItem = item } }
+            ) {
                 Button { open(item) } label: { AlbumCard(item: item) }
                     .buttonStyle(PressableStyle())
             }
-            .contextMenu { menu(for: item) }
-        }
-    }
-
-    @ViewBuilder
-    private func menu(for item: SavedItem) -> some View {
-        Button { open(item) } label: {
-            Label("Listen in \(item.platform.name)", systemImage: "play")
-        }
-        Button {
-            selecting = true
-            selection = [item.id]
-        } label: {
-            Label("Select", systemImage: "checkmark.circle")
-        }
-        Button(role: .destructive) {
-            withAnimation(.snappy) { store.delete(item) }
-        } label: {
-            Label("Remove", systemImage: "trash")
         }
     }
 
@@ -245,15 +243,14 @@ struct LibraryView: View {
         Haptics.impact(.light)
     }
 
+    private func dismissMenu() {
+        withAnimation(.easeOut(duration: 0.2)) { heldItem = nil }
+    }
+
     private func endSelecting() {
         selecting = false
         selection = []
     }
-}
-
-private struct PagerOffsetKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
 struct BrowserLink: Identifiable {

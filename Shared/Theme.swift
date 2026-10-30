@@ -10,6 +10,8 @@ struct Theme: Identifiable, Equatable {
     let accent: Color
     let onAccent: Color
     let isDark: Bool
+    /// Optional full-screen artwork drawn behind the library (asset name).
+    var backdrop: String? = nil
 
     var colorScheme: ColorScheme { isDark ? .dark : .light }
 
@@ -22,6 +24,11 @@ struct Theme: Identifiable, Equatable {
               background: Color(hex: 0x131213), surface: Color(hex: 0x1D1B1C),
               text: Color(hex: 0xECE3D0), secondaryText: Color(hex: 0x9A9084),
               accent: Color(hex: 0xC2483A), onAccent: Color(hex: 0xF4EAD8), isDark: true),
+        Theme(id: "divine", name: "Divine Comedy",
+              background: Color(hex: 0x0D0F1A), surface: Color(hex: 0x181B2A),
+              text: Color(hex: 0xEEE4CC), secondaryText: Color(hex: 0x9A93A6),
+              accent: Color(hex: 0xD4AF6A), onAccent: Color(hex: 0x0D0F1A), isDark: true,
+              backdrop: "DivineComedyBackdrop"),
         Theme(id: "paper", name: "Paper",
               background: Color(hex: 0xF7F3EA), surface: Color(hex: 0xFFFFFF),
               text: Color(hex: 0x1E1B16), secondaryText: Color(hex: 0x7A7266),

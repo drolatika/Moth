@@ -2,7 +2,7 @@ name: Moth
 options:
   bundleIdPrefix: com.ryanschlecht
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"
   xcodeVersion: "26.0"
   createIntermediateGroups: true
 

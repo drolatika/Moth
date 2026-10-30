@@ -4,7 +4,9 @@ A read-it-later app for music. Share an album, track or playlist from Spotify, A
 
 ## Build
 
-Requires a Mac with Xcode 15+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
+Moth needs iOS 18 or later.
+
+Requires a Mac with Xcode 16+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 
 ```sh
 brew install xcodegen
@@ -18,8 +20,8 @@ The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlec
 
 - **Queue and Heard** are two pages; swipe left for Heard. Small moths circle the title on Queue and fly to the stone lantern as you swipe; it catches light and they gather around it. Swiping back puts it out.
 - **Tap** an album to open it in the app it came from (or in Moth's own browser, set in Settings).
-- **Hold** an album for the menu: Listen, Select, Remove.
-- **Press, pause briefly, then flick** an album toward the other page to move it there (Queue → Heard, or back).
+- **Hold** an album still for the menu: Listen, Select, Remove.
+- **Press, then move**: the album lifts and follows your finger; flick it toward the other page to move it there (Queue → Heard, or back). Quick swipes still page and scroll as normal.
 - **Select** lets you mark several as heard (or back to the queue) or remove them at once.
 - **Settings** (gear, top left): profile placeholder for future accounts, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
 
@@ -40,7 +42,7 @@ The Spotify Client ID and Last.fm API key aren't secret (both are designed to sh
 - **Opening** tries the universal link (lands in the installed app), then the app's URL scheme, then Safari.
 - **Storage** is a JSON file plus downsampled JPEG artwork in the App Group container.
 - **Header art** (`Moth/Views/Header/`): the lantern and moths are drawn in code with SwiftUI `Canvas`, driven by the page position and a timeline, and pause when Reduce Motion is on.
-- **Themes**: 15 in `Shared/Theme.swift`. The default "Moth" theme is a washed near-black so the lantern stands out.
+- **Themes**: 16 in `Shared/Theme.swift`. The default "Moth" theme is a washed near-black so the lantern stands out. "Divine Comedy" draws a star field, angels and a faint Dante and Beatrice behind the library, built by `scripts/make_divine_comedy.py` from a public-domain Renaissance woodcut of the *Paradiso* (`Design/Art/paradiso-woodcut.png`).
 
 ## Fonts and icon
 

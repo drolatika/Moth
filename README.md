@@ -12,7 +12,7 @@ xcodegen            # generates Moth.xcodeproj from project.yml
 open Moth.xcodeproj
 ```
 
-The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlecht.moth.share`) and its App Group is `group.com.ryanschlecht.moth`, all set in `project.yml`. Pick your signing team in Xcode under Signing & Capabilities. Both targets use the same App Group, which is how the share extension writes into the app's library.
+The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlecht.moth.share`) and its App Group is `group.com.ryanschlecht.moth`, all set in `project.yml`. Signing uses development team `JH4ZQ9MS78`, also set in `project.yml`, so regenerating the project keeps it. Both targets use the same App Group, which is how the share extension writes into the app's library.
 
 ## How it works
 

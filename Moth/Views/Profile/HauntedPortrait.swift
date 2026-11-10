@@ -1,38 +1,46 @@
 import SwiftUI
 
-/// Your picture in an old gilded rococo frame: a shell crest, scrolls and acanthus
-/// leaves, the gilt worn dark, cobwebs strung off the frame, a spider idling on its
-/// thread, and a candle beside it that flickers and warms the gold.
-/// Drawn on a 300×300 grid.
+/// Your picture hung in an old carved gilt frame (rendered by scripts/make_frame.py),
+/// cobwebs in its corners, and a tall taper burning in front of it whose flame
+/// dances and throws a warm, flickering light across the gold.
+/// Laid out on a 300×300 grid.
 struct HauntedPortrait: View {
     var photo: UIImage?
 
     static let size: CGFloat = 300
-    private static let center = CGPoint(x: 140, y: 146)
-    private static let radii = CGSize(width: 74, height: 94)
+    /// The frame's width on the 300 grid (110 of the asset's 900 px).
+    static let frameWidth: CGFloat = 110.0 / 3
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let inset = Self.frameWidth - 2
         ZStack(alignment: .topLeading) {
             portrait
-                .frame(width: Self.radii.width * 2, height: Self.radii.height * 2)
-                .offset(x: Self.center.x - Self.radii.width, y: Self.center.y - Self.radii.height)
+                .frame(width: Self.size - inset * 2, height: Self.size - inset * 2)
+                .clipped()
+                .offset(x: inset, y: inset)
+
+            Image("PortraitFrame")
+                .resizable()
+                .interpolation(.high)
+                .frame(width: Self.size, height: Self.size)
 
             Canvas { context, _ in
-                FrameArt.drawFrame(in: &context, center: Self.center, radii: Self.radii)
-                FrameArt.drawCobwebs(in: &context, center: Self.center, radii: Self.radii)
+                Candlelight.drawCobwebs(in: &context, opening: CGRect(x: Self.frameWidth, y: Self.frameWidth,
+                                                                       width: Self.size - Self.frameWidth * 2,
+                                                                       height: Self.size - Self.frameWidth * 2))
             }
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { timeline in
-                let t = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
+            TimelineView(.animation(minimumInterval: 1.0 / 60, paused: reduceMotion)) { timeline in
+                let t = reduceMotion ? 1.3 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 100_000)
                 Canvas { context, _ in
-                    FrameArt.drawCandle(in: &context, time: t, base: CGPoint(x: 262, y: 262))
-                    FrameArt.drawSpider(in: &context, time: t, anchor: CGPoint(x: Self.center.x - Self.radii.width - 17, y: Self.center.y + 26))
+                    Candlelight.draw(in: &context, time: t, candle: Candlelight.candleRect)
                 }
             }
         }
         .frame(width: Self.size, height: Self.size)
+        .shadow(color: .black.opacity(0.55), radius: 14, y: 8)
         .contentShape(Rectangle())
         .accessibilityHidden(true)
     }
@@ -42,320 +50,262 @@ struct HauntedPortrait: View {
             if let photo {
                 Image(uiImage: photo).resizable().scaledToFill()
             } else {
-                LinearGradient(colors: [Color(hex: 0x2A2420), Color(hex: 0x15110F)], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(hex: 0x3A2E24), Color(hex: 0x17110D)], startPoint: .top, endPoint: .bottom)
                 Image(systemName: "person.fill")
-                    .font(.system(size: 64))
-                    .foregroundStyle(Color(hex: 0x4A4038))
-                    .offset(y: 14)
+                    .font(.system(size: 92))
+                    .foregroundStyle(Color(hex: 0x54463A))
+                    .offset(y: 26)
             }
-            // Old varnish: warm, darker toward the edges.
-            RadialGradient(colors: [.clear, Color(hex: 0x1A0F06).opacity(0.55)], center: .center, startRadius: 40, endRadius: 110)
-            Color(hex: 0xC08A3E).opacity(0.08).blendMode(.multiply)
+            // Old varnish: warm, and darker toward the edges.
+            RadialGradient(colors: [.clear, Color(hex: 0x140C05).opacity(0.5)], center: .center, startRadius: 60, endRadius: 170)
+            Color(hex: 0xC08A3E).opacity(0.1).blendMode(.multiply)
         }
-        .clipShape(Ellipse())
     }
 }
 
-/// The drawing itself, kept apart from the view so each layer redraws only when it must.
+/// The frame's gold, for small touches elsewhere (profile slots, the Settings card).
 enum FrameArt {
-    static let gold = Color(hex: 0xB8954A)
-    static let goldLight = Color(hex: 0xE9D395)
-    static let goldDark = Color(hex: 0x5C4520)
-    static let tarnish = Color(hex: 0x2E2618)
+    static let gold = Color(hex: 0xA08848)
+    static let goldDark = Color(hex: 0x4E4220)
+}
 
-    // MARK: Frame
+/// The candle, its flame and its light, plus the cobwebs.
+enum Candlelight {
+    /// The taper, standing in front of the lower right of the picture.
+    static let candleRect = CGRect(x: 226, y: 132, width: 10, height: 154)
 
-    static func drawFrame(in context: inout GraphicsContext, center c: CGPoint, radii r: CGSize) {
-        // The oval moulding: a gilt band between two ellipses.
-        let inner = CGRect(x: c.x - r.width - 1, y: c.y - r.height - 1, width: (r.width + 1) * 2, height: (r.height + 1) * 2)
-        let outer = inner.insetBy(dx: -8, dy: -8)
-        var band = Path(ellipseIn: outer)
-        band.addEllipse(in: inner)
-        context.fill(band, with: .linearGradient(
-            Gradient(colors: [goldLight, gold, goldDark, gold, goldDark]),
-            startPoint: CGPoint(x: outer.minX, y: outer.minY), endPoint: CGPoint(x: outer.maxX, y: outer.maxY)
-        ), style: FillStyle(eoFill: true))
-        context.stroke(Path(ellipseIn: outer), with: .color(tarnish), lineWidth: 1)
-        context.stroke(Path(ellipseIn: inner), with: .color(tarnish), lineWidth: 1.2)
+    // MARK: Flame motion
 
-        // A row of beads along the middle of the band.
-        let beads = 54
-        for i in 0..<beads {
-            let a = Double(i) / Double(beads) * 2 * .pi
-            let p = CGPoint(x: c.x + (r.width + 5) * cos(a), y: c.y + (r.height + 5) * sin(a))
-            let bead = Path(ellipseIn: CGRect(x: p.x - 1.1, y: p.y - 1.1, width: 2.2, height: 2.2))
-            context.fill(bead, with: .color(goldLight.opacity(0.85)))
-        }
-
-        let top = CGPoint(x: c.x, y: c.y - r.height - 9)
-        let bottom = CGPoint(x: c.x, y: c.y + r.height + 9)
-        let mirror = CGAffineTransform(translationX: 2 * c.x, y: 0).scaledBy(x: -1, y: 1)
-
-        // Crest: a scalloped shell with a scroll curling away on each side.
-        drawShell(in: &context, base: top)
-        var crestScroll = Path()
-        crestScroll.move(to: CGPoint(x: top.x - 8, y: top.y + 1))
-        crestScroll.addCurve(to: CGPoint(x: top.x - 42, y: top.y + 6),
-                             control1: CGPoint(x: top.x - 20, y: top.y - 10), control2: CGPoint(x: top.x - 34, y: top.y - 8))
-        addCurl(to: &crestScroll, at: CGPoint(x: top.x - 42, y: top.y + 6), radius: 6, start: -.pi / 2, turns: 1.1, clockwise: false)
-        gild(crestScroll, in: &context, width: 2.2)
-        gild(crestScroll.applying(mirror), in: &context, width: 2.2)
-
-        // Sides: a C-scroll on each, curled at both ends.
-        var side = Path()
-        let sx = c.x - r.width - 10
-        side.move(to: CGPoint(x: sx + 2, y: c.y - 30))
-        side.addCurve(to: CGPoint(x: sx + 2, y: c.y + 30),
-                      control1: CGPoint(x: sx - 14, y: c.y - 14), control2: CGPoint(x: sx - 14, y: c.y + 14))
-        addCurl(to: &side, at: CGPoint(x: sx + 2, y: c.y + 30), radius: 4.5, start: .pi, turns: 1, clockwise: true)
-        var sideTop = Path()
-        sideTop.move(to: CGPoint(x: sx + 2, y: c.y - 30))
-        addCurl(to: &sideTop, at: CGPoint(x: sx + 2, y: c.y - 30), radius: 4.5, start: .pi, turns: 1, clockwise: false)
-        side.addPath(sideTop)
-        gild(side, in: &context, width: 2.4)
-        gild(side.applying(mirror), in: &context, width: 2.4)
-
-        // Bottom: two acanthus leaves sweeping up from a small knot.
-        var leaf = Path()
-        leaf.move(to: CGPoint(x: bottom.x - 2, y: bottom.y + 4))
-        leaf.addQuadCurve(to: CGPoint(x: bottom.x - 50, y: bottom.y - 8), control: CGPoint(x: bottom.x - 26, y: bottom.y + 16))
-        leaf.addQuadCurve(to: CGPoint(x: bottom.x - 2, y: bottom.y - 2), control: CGPoint(x: bottom.x - 34, y: bottom.y + 2))
-        leaf.closeSubpath()
-        context.fill(leaf, with: .linearGradient(Gradient(colors: [goldLight, gold, goldDark]),
-                                                 startPoint: CGPoint(x: bottom.x - 50, y: bottom.y - 8),
-                                                 endPoint: CGPoint(x: bottom.x, y: bottom.y + 4)))
-        context.fill(leaf.applying(mirror), with: .linearGradient(Gradient(colors: [goldLight, gold, goldDark]),
-                                                                  startPoint: CGPoint(x: bottom.x + 50, y: bottom.y - 8),
-                                                                  endPoint: CGPoint(x: bottom.x, y: bottom.y + 4)))
-        var vein = Path()
-        vein.move(to: CGPoint(x: bottom.x - 4, y: bottom.y + 1))
-        vein.addQuadCurve(to: CGPoint(x: bottom.x - 44, y: bottom.y - 6), control: CGPoint(x: bottom.x - 28, y: bottom.y + 8))
-        var tip = Path()
-        tip.move(to: CGPoint(x: bottom.x - 50, y: bottom.y - 8))
-        addCurl(to: &tip, at: CGPoint(x: bottom.x - 50, y: bottom.y - 8), radius: 4, start: 0, turns: 1, clockwise: false)
-        vein.addPath(tip)
-        for path in [vein, vein.applying(mirror)] {
-            context.stroke(path, with: .color(tarnish.opacity(0.8)), lineWidth: 0.8)
-        }
-        let knot = Path(ellipseIn: CGRect(x: bottom.x - 5, y: bottom.y - 2, width: 10, height: 8))
-        context.fill(knot, with: .color(gold))
-        context.stroke(knot, with: .color(tarnish), lineWidth: 0.8)
-
-        // Small leaf sprigs on the four diagonals.
-        for angle in [-0.78, -2.36, 0.85, 2.29] {
-            let p = CGPoint(x: c.x + (r.width + 9) * cos(angle), y: c.y + (r.height + 9) * sin(angle))
-            var sprig = Path()
-            let out = CGPoint(x: p.x + 11 * cos(angle), y: p.y + 11 * sin(angle))
-            sprig.move(to: p)
-            sprig.addQuadCurve(to: out, control: CGPoint(x: p.x + 9 * cos(angle - 0.7), y: p.y + 9 * sin(angle - 0.7)))
-            sprig.addQuadCurve(to: p, control: CGPoint(x: p.x + 9 * cos(angle + 0.7), y: p.y + 9 * sin(angle + 0.7)))
-            context.fill(sprig, with: .color(gold))
-            context.stroke(sprig, with: .color(tarnish.opacity(0.9)), lineWidth: 0.7)
-        }
-
-        // Age: dark patches where the gilt has worn through.
-        for (x, y, w) in [(-0.6, -0.95, 14.0), (0.92, 0.3, 10.0), (-0.85, 0.55, 12.0), (0.3, 0.97, 9.0)] {
-            let p = CGPoint(x: c.x + (r.width + 5) * x, y: c.y + (r.height + 5) * y)
-            context.fill(Path(ellipseIn: CGRect(x: p.x - w / 2, y: p.y - 3, width: w, height: 6)),
-                         with: .color(tarnish.opacity(0.35)))
-        }
+    /// Smooth 1D value noise in -1…1.
+    static func noise(_ x: Double) -> Double {
+        let i = floor(x)
+        let f = x - i
+        let u = f * f * (3 - 2 * f)
+        return hash(i) * (1 - u) + hash(i + 1) * u
     }
 
-    private static func drawShell(in context: inout GraphicsContext, base: CGPoint) {
-        let ribs = 7
-        let radius: CGFloat = 22
-        let ends = (0...ribs).map { i -> CGPoint in
-            let a = -Double.pi + 0.35 + Double(i) / Double(ribs) * (Double.pi - 0.7)
-            return CGPoint(x: base.x + radius * cos(a), y: base.y + 2 + radius * 0.95 * sin(a))
-        }
-        var shell = Path()
-        shell.move(to: base)
-        shell.addLine(to: ends[0])
-        for i in 1...ribs {
-            let mid = CGPoint(x: (ends[i - 1].x + ends[i].x) / 2, y: (ends[i - 1].y + ends[i].y) / 2)
-            let bulge = CGPoint(x: base.x + (mid.x - base.x) * 1.22, y: base.y + (mid.y - base.y) * 1.22)
-            shell.addQuadCurve(to: ends[i], control: bulge)
-        }
-        shell.closeSubpath()
-        context.fill(shell, with: .linearGradient(Gradient(colors: [goldLight, gold, goldDark]),
-                                                  startPoint: CGPoint(x: base.x, y: base.y - radius), endPoint: base))
-        context.stroke(shell, with: .color(tarnish), lineWidth: 1)
-        var ribLines = Path()
-        for end in ends.dropFirst().dropLast() {
-            ribLines.move(to: CGPoint(x: base.x, y: base.y - 1))
-            ribLines.addLine(to: end)
-        }
-        context.stroke(ribLines, with: .color(goldDark.opacity(0.9)), lineWidth: 0.7)
+    private static func hash(_ n: Double) -> Double {
+        let s = sin(n * 127.1 + 311.7) * 43_758.5453
+        return (s - floor(s)) * 2 - 1
     }
 
-    /// Appends a spiral curl that starts at `point` and winds inward.
-    private static func addCurl(to path: inout Path, at point: CGPoint, radius: CGFloat, start: Double, turns: Double, clockwise: Bool) {
-        let steps = 24
-        let direction: Double = clockwise ? 1 : -1
-        // The spiral's centre sits one radius away from the start point.
-        let center = CGPoint(x: point.x - radius * cos(start), y: point.y - radius * sin(start))
-        path.move(to: point)
-        for step in 1...steps {
-            let t = Double(step) / Double(steps)
-            let a = start + direction * t * turns * 2 * .pi
-            let r = radius * (1 - 0.75 * t)
-            path.addLine(to: CGPoint(x: center.x + r * cos(a), y: center.y + r * sin(a)))
-        }
+    struct FlameState {
+        var height: Double
+        var width: Double
+        /// Where the tip has drifted to, sideways.
+        var lean: Double
+        /// Quick sideways licks on top of the lean.
+        var flutter: Double
+        /// 0…1 brightness for the glow.
+        var intensity: Double
     }
 
-    /// A gilt stroke: dark underside, gold body, a thin highlight.
-    private static func gild(_ path: Path, in context: inout GraphicsContext, width: CGFloat) {
-        let round = StrokeStyle(lineWidth: width + 1.6, lineCap: .round, lineJoin: .round)
-        context.stroke(path.applying(CGAffineTransform(translationX: 0, y: 0.8)), with: .color(tarnish.opacity(0.9)), style: round)
-        context.stroke(path, with: .color(gold), style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round))
-        context.stroke(path.applying(CGAffineTransform(translationX: -0.3, y: -0.4)), with: .color(goldLight.opacity(0.6)),
-                       style: StrokeStyle(lineWidth: width * 0.35, lineCap: .round, lineJoin: .round))
+    static func flame(at t: Double) -> FlameState {
+        // Every so often a draught catches it: it leans, licks and shrinks, then settles.
+        let gust = max(0, noise(t * 0.33 + 40) - 0.35) * 1.6
+        let lean = 2.2 * noise(t * 0.8 + 10) + 1.2 * noise(t * 2.7 + 20) + gust * 3.5 * noise(t * 1.7 + 5)
+        let flutter = (0.7 + 2.6 * gust) * (sin(t * 19 + 3 * noise(t * 2)) * 0.6 + noise(t * 11 + 60) * 0.7)
+        let height = 30 * (0.9 + 0.12 * noise(t * 4.3 + 30) + 0.05 * sin(t * 13.7)) * (1 - 0.22 * gust)
+        let width = 9.6 * (1 + 0.1 * noise(t * 6.1 + 50) + 0.12 * gust)
+        let intensity = 0.86 + 0.09 * noise(t * 7 + 70) + 0.05 * noise(t * 23 + 80) - 0.12 * gust
+        return FlameState(height: height, width: width, lean: lean, flutter: flutter, intensity: intensity)
+    }
+
+    // MARK: Drawing
+
+    static func draw(in context: inout GraphicsContext, time t: Double, candle: CGRect) {
+        let state = flame(at: t)
+        let wickTop = CGPoint(x: candle.midX + 0.4, y: candle.minY - 3)
+        let k = state.intensity
+
+        // Light thrown across the frame and the picture.
+        context.drawLayer { layer in
+            layer.blendMode = .plusLighter
+            let center = CGPoint(x: wickTop.x + state.lean * 0.6, y: wickTop.y - state.height * 0.35)
+            let radius = 170 * (0.9 + 0.1 * k)
+            layer.fill(Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
+                       with: .radialGradient(Gradient(stops: [
+                           .init(color: Color(hex: 0xFFC27A).opacity(0.42 * k), location: 0),
+                           .init(color: Color(hex: 0xFF9A48).opacity(0.2 * k), location: 0.35),
+                           .init(color: Color(hex: 0xFF7A30).opacity(0.07 * k), location: 0.7),
+                           .init(color: .clear, location: 1),
+                       ]), center: center, startRadius: 0, endRadius: radius))
+        }
+
+        drawCandle(in: &context, rect: candle, intensity: k)
+        drawFlame(in: &context, state: state, wickTop: wickTop)
+    }
+
+    private static func drawCandle(in context: inout GraphicsContext, rect: CGRect, intensity k: Double) {
+        // A soft shadow on the painting behind it.
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 3))
+            layer.fill(Path(roundedRect: rect.offsetBy(dx: 4, dy: 3), cornerRadius: 3), with: .color(.black.opacity(0.35)))
+        }
+
+        // Beeswax, shaded round.
+        var wax = Path()
+        wax.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        wax.addLine(to: CGPoint(x: rect.minX, y: rect.minY + 2))
+        wax.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + 2), control: CGPoint(x: rect.midX, y: rect.minY + 4.5))
+        wax.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        wax.closeSubpath()
+        context.fill(wax, with: .linearGradient(
+            Gradient(colors: [Color(hex: 0x6E5424), Color(hex: 0xC9A458), Color(hex: 0xEED48E), Color(hex: 0xB89248), Color(hex: 0x5E461E)]),
+            startPoint: CGPoint(x: rect.minX, y: 0), endPoint: CGPoint(x: rect.maxX, y: 0)
+        ))
+        // The top glows where the flame shines through the wax, and the light fades down its length.
+        context.fill(wax, with: .linearGradient(
+            Gradient(stops: [
+                .init(color: Color(hex: 0xFFE2A0).opacity(0.55 * k), location: 0),
+                .init(color: Color(hex: 0xFFC870).opacity(0.18 * k), location: 0.12),
+                .init(color: .clear, location: 0.35),
+                .init(color: .black.opacity(0.25), location: 1),
+            ]),
+            startPoint: CGPoint(x: 0, y: rect.minY), endPoint: CGPoint(x: 0, y: rect.maxY)
+        ))
+        // Two drips run down from the rim, a shade paler than the candle.
+        var drips = Path()
+        for (x, length) in [(rect.minX + 0.4, 15.0), (rect.maxX - 2.6, 8.0)] {
+            drips.move(to: CGPoint(x: x, y: rect.minY + 2))
+            drips.addLine(to: CGPoint(x: x, y: rect.minY + length))
+            drips.addQuadCurve(to: CGPoint(x: x + 2.2, y: rect.minY + length), control: CGPoint(x: x + 1.1, y: rect.minY + length + 2.2))
+            drips.addLine(to: CGPoint(x: x + 2.2, y: rect.minY + 2))
+            drips.closeSubpath()
+        }
+        context.fill(drips, with: .color(Color(hex: 0xF0D898).opacity(0.85)))
+        // Melted cup at the top.
+        let cup = Path(ellipseIn: CGRect(x: rect.minX + 0.5, y: rect.minY + 0.5, width: rect.width - 1, height: 3.5))
+        context.fill(cup, with: .color(Color(hex: 0xFFE7A8).opacity(0.75)))
+
+        // A small brass socket at the foot.
+        let socket = CGRect(x: rect.midX - 9, y: rect.maxY - 6, width: 18, height: 8)
+        context.fill(Path(roundedRect: socket, cornerRadius: 2.5), with: .linearGradient(
+            Gradient(colors: [Color(hex: 0x4A3A18), Color(hex: 0xC8A860), Color(hex: 0x7A6028), Color(hex: 0x3A2C12)]),
+            startPoint: CGPoint(x: socket.minX, y: 0), endPoint: CGPoint(x: socket.maxX, y: 0)
+        ))
+        context.fill(Path(ellipseIn: CGRect(x: socket.minX - 2, y: socket.minY - 2, width: socket.width + 4, height: 4)),
+                     with: .color(Color(hex: 0xB89650)))
+    }
+
+    private static func drawFlame(in context: inout GraphicsContext, state: FlameState, wickTop: CGPoint) {
+        let base = wickTop
+        let h = state.height, w = state.width
+        let tipX = base.x + state.lean + state.flutter
+        let tip = CGPoint(x: tipX, y: base.y - h)
+        // The upper body lags the tip, so licks travel up the flame as an S-bend.
+        let bend = state.lean * 0.5 + state.flutter * 0.25
+
+        func body(widthScale: Double, heightScale: Double, rise: Double) -> Path {
+            let hh = h * heightScale, ww = w * widthScale
+            let b = CGPoint(x: base.x, y: base.y - rise)
+            let tp = CGPoint(x: base.x + (tip.x - base.x) * heightScale, y: b.y - hh)
+            var path = Path()
+            path.move(to: CGPoint(x: b.x, y: b.y + 2))
+            path.addCurve(to: CGPoint(x: b.x - ww / 2, y: b.y - hh * 0.3),
+                          control1: CGPoint(x: b.x - ww * 0.3, y: b.y + 2), control2: CGPoint(x: b.x - ww * 0.56, y: b.y - hh * 0.08))
+            path.addCurve(to: tp,
+                          control1: CGPoint(x: b.x - ww * 0.42 + bend * 0.3, y: b.y - hh * 0.55),
+                          control2: CGPoint(x: tp.x - ww * 0.12 + bend * 0.35, y: tp.y + hh * 0.3))
+            path.addCurve(to: CGPoint(x: b.x + ww / 2, y: b.y - hh * 0.3),
+                          control1: CGPoint(x: tp.x + ww * 0.12 + bend * 0.35, y: tp.y + hh * 0.3),
+                          control2: CGPoint(x: b.x + ww * 0.42 + bend * 0.3, y: b.y - hh * 0.55))
+            path.addCurve(to: CGPoint(x: b.x, y: b.y + 2),
+                          control1: CGPoint(x: b.x + ww * 0.56, y: b.y - hh * 0.08), control2: CGPoint(x: b.x + ww * 0.3, y: b.y + 2))
+            path.closeSubpath()
+            return path
+        }
+
+        let outer = body(widthScale: 1, heightScale: 1, rise: 0)
+        // The wick, mostly swallowed by the flame, its tip glowing.
+        var wick = Path()
+        wick.move(to: CGPoint(x: base.x - 0.3, y: base.y + 4))
+        wick.addQuadCurve(to: CGPoint(x: base.x + 0.4 + state.lean * 0.08, y: base.y - 2.5),
+                          control: CGPoint(x: base.x - 0.8, y: base.y + 0.5))
+        context.stroke(wick, with: .color(Color(hex: 0x1E1610)), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+        context.fill(Path(ellipseIn: CGRect(x: base.x - 0.5 + state.lean * 0.08, y: base.y - 3.4, width: 1.8, height: 1.8)),
+                     with: .color(Color(hex: 0xFF6A28)))
+        // Halo.
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 9))
+            layer.fill(body(widthScale: 2.2, heightScale: 1.15, rise: -2), with: .color(Color(hex: 0xFFAA50).opacity(0.5 * state.intensity)))
+        }
+        // Soft orange envelope.
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 1.2))
+            layer.fill(outer, with: .linearGradient(Gradient(stops: [
+                .init(color: Color(hex: 0xFFB04A).opacity(0.25), location: 0),
+                .init(color: Color(hex: 0xFFC25A), location: 0.15),
+                .init(color: Color(hex: 0xFFD27A), location: 0.45),
+                .init(color: Color(hex: 0xFF9A3A).opacity(0.9), location: 0.8),
+                .init(color: Color(hex: 0xE0541A).opacity(0), location: 1),
+            ]), startPoint: base, endPoint: tip))
+        }
+        // Bright core.
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 0.8))
+            layer.fill(body(widthScale: 0.52, heightScale: 0.6, rise: 1.5), with: .linearGradient(Gradient(stops: [
+                .init(color: Color(hex: 0xFFFDF2), location: 0),
+                .init(color: Color(hex: 0xFFF2C4), location: 0.55),
+                .init(color: Color(hex: 0xFFE39A).opacity(0), location: 1),
+            ]), startPoint: base, endPoint: tip))
+        }
+        // Blue at the root.
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 0.9))
+            layer.fill(Path(ellipseIn: CGRect(x: base.x - 2, y: base.y - 2, width: 4, height: 3.6)),
+                       with: .color(Color(hex: 0x5878F0).opacity(0.35)))
+        }
     }
 
     // MARK: Cobwebs
 
-    static func drawCobwebs(in context: inout GraphicsContext, center c: CGPoint, radii r: CGSize) {
-        // Upper left, strung from the frame to the crest scroll and out to the wall.
-        web(in: &context, anchor: CGPoint(x: c.x - r.width * 0.62, y: c.y - r.height * 0.84),
-            from: -2.95, to: -1.35, length: 52, rings: 5, seed: 1)
-        // A smaller one strung between the right side scroll and the frame above it.
-        web(in: &context, anchor: CGPoint(x: c.x + r.width + 12, y: c.y - 30),
-            from: -2.75, to: -1.45, length: 34, rings: 4, seed: 2)
-        // Loose strands drooping between the frame and the crest.
-        var strand = Path()
-        strand.move(to: CGPoint(x: c.x + 10, y: c.y - r.height - 14))
-        strand.addQuadCurve(to: CGPoint(x: c.x + 46, y: c.y - r.height + 2), control: CGPoint(x: c.x + 30, y: c.y - r.height + 6))
-        strand.move(to: CGPoint(x: c.x - r.width - 12, y: c.y + 32))
-        strand.addQuadCurve(to: CGPoint(x: c.x - r.width + 2, y: c.y + 70), control: CGPoint(x: c.x - r.width - 12, y: c.y + 58))
-        context.stroke(strand, with: .color(.white.opacity(0.22)), lineWidth: 0.5)
+    static func drawCobwebs(in context: inout GraphicsContext, opening r: CGRect) {
+        // A full web filling the top left corner of the picture.
+        cornerWeb(in: &context, corner: CGPoint(x: r.minX, y: r.minY), from: 0.03, to: .pi / 2 - 0.03, length: 78, rings: 7, seed: 1)
+        // A smaller, torn one in the top right.
+        cornerWeb(in: &context, corner: CGPoint(x: r.maxX, y: r.minY), from: .pi / 2 + 0.05, to: .pi - 0.05, length: 44, rings: 5, seed: 4)
+        // Loose strands: one sagging along the top, a few hanging off the right side by the candle.
+        var strands = Path()
+        strands.move(to: CGPoint(x: r.minX + 70, y: r.minY + 1))
+        strands.addQuadCurve(to: CGPoint(x: r.maxX - 34, y: r.minY + 1), control: CGPoint(x: r.midX + 10, y: r.minY + 22))
+        strands.move(to: CGPoint(x: r.maxX, y: r.minY + 96))
+        strands.addQuadCurve(to: CGPoint(x: candleRect.maxX, y: candleRect.minY + 40), control: CGPoint(x: r.maxX - 8, y: r.minY + 122))
+        strands.move(to: CGPoint(x: r.maxX, y: r.minY + 120))
+        strands.addQuadCurve(to: CGPoint(x: candleRect.maxX, y: candleRect.minY + 76), control: CGPoint(x: r.maxX - 10, y: r.minY + 150))
+        strands.move(to: CGPoint(x: r.maxX, y: r.minY + 140))
+        strands.addQuadCurve(to: CGPoint(x: r.maxX - 22, y: r.maxY), control: CGPoint(x: r.maxX - 4, y: r.maxY - 30))
+        context.stroke(strands, with: .color(.white.opacity(0.16)), lineWidth: 0.5)
     }
 
-    private static func web(in context: inout GraphicsContext, anchor: CGPoint, from: Double, to: Double,
-                            length: CGFloat, rings: Int, seed: Int) {
-        let threads = 7
-        let ends = (0..<threads).map { i -> (angle: Double, length: CGFloat) in
-            let jitter = sin(Double(i * 7 + seed * 13)) * 0.18
+    private static func cornerWeb(in context: inout GraphicsContext, corner: CGPoint, from: Double, to: Double,
+                                  length: CGFloat, rings: Int, seed: Int) {
+        let threads = 9
+        let spokes = (0..<threads).map { i -> (angle: Double, length: CGFloat) in
+            let jitter = sin(Double(i * 7 + seed * 13)) * 0.22
             return (from + (to - from) * Double(i) / Double(threads - 1), length * CGFloat(1 + jitter))
         }
         var path = Path()
-        for end in ends {
-            path.move(to: anchor)
-            path.addLine(to: CGPoint(x: anchor.x + end.length * cos(end.angle), y: anchor.y + end.length * sin(end.angle)))
+        for spoke in spokes {
+            path.move(to: corner)
+            path.addLine(to: CGPoint(x: corner.x + spoke.length * cos(spoke.angle), y: corner.y + spoke.length * sin(spoke.angle)))
         }
         for ring in 1...rings {
-            let fraction = CGFloat(ring) / CGFloat(rings + 1)
+            let fraction = pow(CGFloat(ring) / CGFloat(rings + 1), 0.9)
             for i in 1..<threads {
-                let a0 = ends[i - 1], a1 = ends[i]
-                let p0 = CGPoint(x: anchor.x + a0.length * fraction * cos(a0.angle), y: anchor.y + a0.length * fraction * sin(a0.angle))
-                let p1 = CGPoint(x: anchor.x + a1.length * fraction * cos(a1.angle), y: anchor.y + a1.length * fraction * sin(a1.angle))
-                // Each strand sags toward the centre.
+                let a0 = spokes[i - 1], a1 = spokes[i]
+                if (ring * 3 + i + seed) % 5 == 0 { continue }   // torn here and there
+                // Each strand meets its spokes at slightly different heights, as real ones do.
+                let f0 = fraction * CGFloat(1 + 0.08 * sin(Double(ring * 11 + i * 5 + seed)))
+                let f1 = fraction * CGFloat(1 + 0.08 * sin(Double(ring * 11 + (i + 1) * 5 + seed)))
+                let p0 = CGPoint(x: corner.x + a0.length * f0 * cos(a0.angle), y: corner.y + a0.length * f0 * sin(a0.angle))
+                let p1 = CGPoint(x: corner.x + a1.length * f1 * cos(a1.angle), y: corner.y + a1.length * f1 * sin(a1.angle))
                 let mid = (a0.angle + a1.angle) / 2
-                let sag = (a0.length + a1.length) / 2 * fraction * 0.84
-                let control = CGPoint(x: anchor.x + sag * cos(mid), y: anchor.y + sag * sin(mid))
-                if ring == rings && i % 3 == 0 { continue }   // a broken strand or two
+                let sag = (a0.length + a1.length) / 2 * fraction * 0.86
                 path.move(to: p0)
-                path.addQuadCurve(to: p1, control: control)
+                path.addQuadCurve(to: p1, control: CGPoint(x: corner.x + sag * cos(mid), y: corner.y + sag * sin(mid)))
             }
         }
-        context.stroke(path, with: .color(.white.opacity(0.26)), lineWidth: 0.5)
-    }
-
-    // MARK: Candle and spider
-
-    static func drawCandle(in context: inout GraphicsContext, time t: Double, base: CGPoint) {
-        let flicker = 0.82 + 0.1 * sin(t * 11) + 0.06 * sin(t * 23 + 1.1) + 0.04 * sin(t * 5.3)
-        let sway = 1.2 * sin(t * 2.1) + 0.6 * sin(t * 5.7)
-        let width: CGFloat = 16, height: CGFloat = 44
-        let top = base.y - height
-        let flameBase = CGPoint(x: base.x, y: top - 3)
-
-        // Warm light falling on the frame and the wall.
-        context.drawLayer { layer in
-            layer.blendMode = .plusLighter
-            let glow = Path(ellipseIn: CGRect(x: flameBase.x - 120, y: flameBase.y - 110, width: 240, height: 220))
-            layer.fill(glow, with: .radialGradient(
-                Gradient(colors: [Manuscript.flame.opacity(0.26 * flicker), Manuscript.ember.opacity(0.1 * flicker), .clear]),
-                center: CGPoint(x: flameBase.x + sway, y: flameBase.y - 6), startRadius: 0, endRadius: 115 * flicker
-            ))
-        }
-
-        // Brass dish.
-        let dish = Path(ellipseIn: CGRect(x: base.x - 17, y: base.y - 4, width: 34, height: 9))
-        context.fill(dish, with: .linearGradient(Gradient(colors: [goldLight, gold, goldDark]),
-                                                 startPoint: CGPoint(x: base.x, y: base.y - 4), endPoint: CGPoint(x: base.x, y: base.y + 5)))
-        context.stroke(dish, with: .color(tarnish), lineWidth: 0.8)
-
-        // Wax, with drips over the rim and a lit side facing the flame.
-        var wax = Path()
-        wax.move(to: CGPoint(x: base.x - width / 2, y: base.y))
-        wax.addLine(to: CGPoint(x: base.x - width / 2, y: top + 3))
-        wax.addQuadCurve(to: CGPoint(x: base.x + width / 2, y: top + 3), control: CGPoint(x: base.x, y: top - 1))
-        wax.addLine(to: CGPoint(x: base.x + width / 2, y: base.y))
-        wax.closeSubpath()
-        context.fill(wax, with: .linearGradient(Gradient(colors: [Color(hex: 0xBFAE8E), Color(hex: 0xEADCBF), Color(hex: 0x9C8B6E)]),
-                                                startPoint: CGPoint(x: base.x - width / 2, y: 0), endPoint: CGPoint(x: base.x + width / 2, y: 0)))
-        var drips = Path()
-        for (x, length) in [(-5.0, 11.0), (2.0, 6.0), (5.5, 16.0)] {
-            drips.addRoundedRect(in: CGRect(x: base.x + x - 1.6, y: top + 1, width: 3.2, height: length),
-                                 cornerSize: CGSize(width: 1.6, height: 1.6))
-        }
-        context.fill(drips, with: .color(Color(hex: 0xF2E7CF)))
-        context.stroke(wax, with: .color(Color(hex: 0x6E5E44).opacity(0.7)), lineWidth: 0.6)
-
-        // Wick and flame.
-        var wick = Path()
-        wick.move(to: CGPoint(x: base.x, y: top + 1))
-        wick.addQuadCurve(to: CGPoint(x: base.x + 0.8, y: top - 4), control: CGPoint(x: base.x - 0.6, y: top - 2))
-        context.stroke(wick, with: .color(Color(hex: 0x2A211A)), lineWidth: 1.1)
-
-        let flameHeight = 17 * flicker
-        let tip = CGPoint(x: flameBase.x + sway * 1.6, y: flameBase.y - flameHeight)
-        var flame = Path()
-        flame.move(to: CGPoint(x: flameBase.x, y: flameBase.y + 2))
-        flame.addQuadCurve(to: tip, control: CGPoint(x: flameBase.x - 6.5, y: flameBase.y - flameHeight * 0.3))
-        flame.addQuadCurve(to: CGPoint(x: flameBase.x, y: flameBase.y + 2), control: CGPoint(x: flameBase.x + 6.5, y: flameBase.y - flameHeight * 0.3))
-        context.drawLayer { layer in
-            layer.addFilter(.blur(radius: 3))
-            layer.fill(flame, with: .color(Manuscript.ember.opacity(0.8)))
-        }
-        context.fill(flame, with: .linearGradient(
-            Gradient(colors: [Color(hex: 0xFFF6DD), Color(hex: 0xFFD27A), Color(hex: 0xF07A2A)]),
-            startPoint: CGPoint(x: flameBase.x, y: flameBase.y), endPoint: tip
-        ))
-        let core = Path(ellipseIn: CGRect(x: flameBase.x - 1.6, y: flameBase.y - 5, width: 3.2, height: 6))
-        context.fill(core, with: .color(Color(hex: 0x4A6BD8).opacity(0.55)))
-    }
-
-    static func drawSpider(in context: inout GraphicsContext, time t: Double, anchor: CGPoint) {
-        // It drifts down and back up very slowly, turning a little on its thread.
-        let drop = 34 + 10 * sin(t * 0.35) + 2 * sin(t * 1.3)
-        let swing = 1.5 * sin(t * 0.8)
-        let body = CGPoint(x: anchor.x + swing, y: anchor.y + drop)
-        var thread = Path()
-        thread.move(to: anchor)
-        thread.addLine(to: body)
-        context.stroke(thread, with: .color(.white.opacity(0.3)), lineWidth: 0.5)
-
-        var legs = Path()
-        for side in [-1.0, 1.0] {
-            for i in 0..<4 {
-                let a = (-0.9 + Double(i) * 0.6)
-                let knee = CGPoint(x: body.x + side * 3.2 * cos(a), y: body.y - 2.2 + 3 * sin(a))
-                let foot = CGPoint(x: body.x + side * 5.2 * cos(a * 0.8), y: body.y + 0.6 + 3.6 * sin(a))
-                legs.move(to: body)
-                legs.addLine(to: knee)
-                legs.addLine(to: foot)
-            }
-        }
-        // Dark, with a faint rim of candlelight so it shows on a dark wall too.
-        let spider = Color(hex: 0x2B241E)
-        let abdomen = Path(ellipseIn: CGRect(x: body.x - 2.2, y: body.y - 1.4, width: 4.4, height: 4.6))
-        let head = Path(ellipseIn: CGRect(x: body.x - 1.3, y: body.y - 3.4, width: 2.6, height: 2.4))
-        context.stroke(legs, with: .color(Color(hex: 0x8A7A66).opacity(0.5)), lineWidth: 1.1)
-        context.stroke(legs, with: .color(spider), lineWidth: 0.6)
-        for part in [abdomen, head] {
-            context.stroke(part, with: .color(Color(hex: 0x8A7A66).opacity(0.55)), lineWidth: 0.8)
-            context.fill(part, with: .color(spider))
-        }
+        context.stroke(path, with: .color(.white.opacity(0.2)), lineWidth: 0.5)
     }
 }

@@ -25,7 +25,7 @@ The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlec
 - **Select** lets you mark several as heard (or back to the queue) or remove them at once.
 - **Artist stacks**: tap + and switch to Artist. Type a name (say, Max Cooper), pick Apple Music, Deezer or Spotify (once connected), choose Albums, EPs and/or Singles, then pick the right artist. Their whole discography lands in the queue as one stack, with the artist's picture as its cover. Tap the stack to open it: tap a release to go to it in its app, tap its circle to mark it heard (the stack moves to Heard once everything in it is heard), hold for Rate & Review or Remove. Adding the same artist again only adds what's new.
 - **Ratings, reviews and notes**: open any album and tap the stars line under its title. Rate in half stars, write a review, keep private notes, and log a listen. Marking an album heard logs a listen automatically (and moving it straight back undoes that).
-- **Profile** (Settings → your name at the top): your picture in an old gilded frame with a candle and cobwebs (tap it to choose a photo), your Top 4 Artists, optional Top 4 Albums and Top 4 Tracks (turn them on in Settings → Profile), what you've heard lately, and your journal: the diary, top and lowest rated, reviews, notes, and most listened artists.
+- **Profile** (Settings → your name at the top): your picture in an old carved gilt frame, cobwebbed, with a taper burning in front of it (tap it to choose a photo), your Top 4 Artists (tap Edit beside a row to swap or remove entries), optional Top 4 Albums and Top 4 Tracks (turn them on in Settings → Profile), what you've heard lately, and your journal: the diary, top and lowest rated, reviews, notes, and most listened artists.
 - **Settings** (gear, top left): profile, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
 
 ## Connecting listening services
@@ -52,5 +52,7 @@ The Spotify Client ID and Last.fm API key aren't secret (both are designed to sh
 ## Fonts and icon
 
 All bundled fonts are under the SIL Open Font License (free for commercial use; licences in `Design/fonts`): UnifrakturMaguntia (the Fraktur "M"), Grenze Gotisch Medium (Gothic lowercase), and Cinzel Decorative Black (the illuminated Q and H). The font files live in `Shared/Fonts`.
+
+The profile frame is rendered by `scripts/make_frame.py`: a height map of the carving, lit like old gilt (needs numpy, scipy and Pillow).
 
 The app icon is the glowing Fraktur "M". `scripts/make_icon.py` renders it and the four alternates (outline, ring, illuminated initial, wordmark) into the asset catalog, plus the previews used in Settings. Needs Pillow and numpy.

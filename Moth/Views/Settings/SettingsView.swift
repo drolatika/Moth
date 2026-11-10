@@ -114,16 +114,21 @@ struct SettingsView: View {
             ProfileView().themed(theme)
         } label: {
             HStack(spacing: 14) {
-                Group {
-                    if let photo = profile.photo {
-                        Image(uiImage: photo).resizable().scaledToFill()
-                    } else {
-                        GildedInitial(letter: "M", size: 52)
+                // A small copy of the portrait in its frame.
+                ZStack {
+                    Group {
+                        if let photo = profile.photo {
+                            Image(uiImage: photo).resizable().scaledToFill()
+                        } else {
+                            Color(hex: 0x241C16)
+                            Image(systemName: "person.fill").foregroundStyle(Color(hex: 0x54463A))
+                        }
                     }
+                    .frame(width: 46, height: 46)
+                    .clipped()
+                    Image("PortraitFrame").resizable().frame(width: 60, height: 60)
                 }
-                .frame(width: 52, height: 64)
-                .clipShape(Ellipse())
-                .overlay { Ellipse().strokeBorder(FrameArt.gold, lineWidth: 2) }
+                .frame(width: 60, height: 60)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(profile.name.isEmpty ? "Your Profile" : profile.name)
                         .font(.headline)

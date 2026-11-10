@@ -16,6 +16,8 @@ struct ProfileView: View {
     @State private var editingName = false
     @State private var nameEntry = ""
     @State private var reviewing: ReleaseRef?
+    /// The top-four row being edited, if any.
+    @State private var editing: ShowcaseKind?
 
     private var shownKinds: [ShowcaseKind] {
         [.artists] + (showAlbums ? [.albums] : []) + (showTracks ? [.tracks] : [])
@@ -48,7 +50,7 @@ struct ProfileView: View {
                             .foregroundStyle(profile.name.isEmpty ? theme.secondaryText : theme.text)
                     }
                     .buttonStyle(.plain)
-                    .padding(.top, -14)
+                    .padding(.top, 10)
 
                     Text(statsLine)
                         .font(.footnote)
@@ -108,7 +110,15 @@ struct ProfileView: View {
 
     private func showcase(_ kind: ShowcaseKind) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle(kind.title)
+            HStack(alignment: .firstTextBaseline) {
+                sectionTitle(kind.title)
+                Button(editing == kind ? "Done" : "Edit") {
+                    withAnimation(.snappy) { editing = editing == kind ? nil : kind }
+                    Haptics.impact(.light)
+                }
+                .font(.subheadline.weight(editing == kind ? .semibold : .medium))
+                .foregroundStyle(theme.accent)
+            }
             HStack(alignment: .top, spacing: 12) {
                 ForEach(0..<4, id: \.self) { index in
                     slot(kind, index: index)
@@ -122,17 +132,46 @@ struct ProfileView: View {
     private func slot(_ kind: ShowcaseKind, index: Int) -> some View {
         let item = profile.slots(kind)[index]
         let target = SlotTarget(kind: kind, index: index)
+        let isEditing = editing == kind
         VStack(spacing: 6) {
             Group {
                 if let item {
                     ShowcaseImage(item: item, round: kind == .artists)
+                        .overlay {
+                            if isEditing {
+                                // Tap to swap it for something else.
+                                ZStack {
+                                    Color.black.opacity(0.45)
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: kind == .artists ? 999 : 6, style: .continuous))
+                            }
+                        }
+                        .overlay(alignment: .topLeading) {
+                            if isEditing {
+                                Button {
+                                    withAnimation(.snappy) { profile.set(nil, at: index, in: kind) }
+                                    Haptics.impact(.light)
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 22))
+                                        .symbolRenderingMode(.palette)
+                                        .foregroundStyle(.white, Color(hex: 0xB0302A))
+                                }
+                                .buttonStyle(.plain)
+                                .offset(x: -6, y: -6)
+                                .accessibilityLabel("Remove \(item.title)")
+                            }
+                        }
                 } else {
                     emptySlot(round: kind == .artists)
                 }
             }
             .aspectRatio(1, contentMode: .fit)
             .onTapGesture {
-                if let url = item?.url, let item {
+                if !isEditing, let url = item?.url, let item {
                     URLOpener.open(url, platform: item.platform)
                 } else {
                     picking = target

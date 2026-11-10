@@ -4,6 +4,8 @@ import Observation
 @Observable
 final class ItemStore {
     private(set) var items: [SavedItem] = []
+    /// Ratings, reviews, notes and the listening log. Marking something heard logs a listen.
+    let journal = JournalStore()
 
     init() {
         reload()
@@ -15,9 +17,61 @@ final class ItemStore {
     }
 
     func setListened(_ item: SavedItem, _ listened: Bool) {
-        update(item) {
-            $0.listenedAt = listened ? .now : nil
-            if !listened { $0.heardTrackIDs = nil }
+        update(item) { Self.mark(&$0, listened) }
+        recordListen(item, listened)
+    }
+
+    /// Heard sets the date; back to the queue clears it along with any struck tracks.
+    /// A stack marks (or clears) every release it holds.
+    private static func mark(_ item: inout SavedItem, _ listened: Bool) {
+        let now = Date()
+        item.listenedAt = listened ? now : nil
+        if !listened { item.heardTrackIDs = nil }
+        if let stack = item.stack {
+            item.stack = stack.map { release in
+                var release = release
+                release.heardAt = listened ? (release.heardAt ?? now) : nil
+                return release
+            }
+        }
+    }
+
+    /// Albums and tracks go in the listening log when heard, and come out again if
+    /// they're moved straight back. Stacks don't: marking a discography isn't a listen.
+    private func recordListen(_ item: SavedItem, _ listened: Bool) {
+        guard !item.isStack else { return }
+        if listened, !item.isListened {
+            journal.logListen(ReleaseRef(item), auto: true)
+        } else if !listened, let date = item.listenedAt {
+            journal.removeAutoLogs(for: item.linkKey, since: date)
+        }
+    }
+
+    // MARK: Stacks
+
+    func toggleReleaseHeard(_ releaseID: String, in item: SavedItem) {
+        guard let release = item.stack?.first(where: { $0.id == releaseID }) else { return }
+        let ref = ReleaseRef(release, in: item)
+        if let heardAt = release.heardAt {
+            journal.removeAutoLogs(for: ref.key, since: heardAt)
+        } else {
+            journal.logListen(ref, auto: true)
+        }
+        update(item) { item in
+            guard var stack = item.stack, let index = stack.firstIndex(where: { $0.id == releaseID }) else { return }
+            stack[index].heardAt = stack[index].heardAt == nil ? .now : nil
+            item.stack = stack
+            // The stack moves to Heard once everything in it is heard.
+            item.listenedAt = stack.allSatisfy(\.isHeard) ? (item.listenedAt ?? .now) : nil
+        }
+    }
+
+    func removeRelease(_ releaseID: String, from item: SavedItem) {
+        update(item) { item in
+            item.stack?.removeAll { $0.id == releaseID }
+            if let stack = item.stack, !stack.isEmpty, stack.allSatisfy(\.isHeard) {
+                item.listenedAt = item.listenedAt ?? .now
+            }
         }
     }
 
@@ -37,10 +91,10 @@ final class ItemStore {
     }
 
     func setListened(ids: Set<UUID>, _ listened: Bool) {
+        items.filter { ids.contains($0.id) }.forEach { recordListen($0, listened) }
         LibraryFile.mutate { items in
             for index in items.indices where ids.contains(items[index].id) {
-                items[index].listenedAt = listened ? .now : nil
-                if !listened { items[index].heardTrackIDs = nil }
+                Self.mark(&items[index], listened)
             }
         }
         reload()

@@ -175,6 +175,47 @@ final class SpotifyService: NSObject, ASWebAuthenticationPresentationContextProv
         return details
     }
 
+    func searchArtists(_ name: String) async throws -> [ArtistResult] {
+        let query = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
+        let json = try await get("/search?type=artist&limit=12&q=\(query)")
+        let items = (json["artists"] as? [String: Any])?["items"] as? [[String: Any]] ?? []
+        return items.compactMap { artist in
+            guard let id = artist["id"] as? String, let name = artist["name"] as? String else { return nil }
+            let genres = (artist["genres"] as? [String] ?? []).prefix(2).joined(separator: ", ")
+            return ArtistResult(
+                id: id, name: name, detail: genres.isEmpty ? nil : genres,
+                imageURL: ((artist["images"] as? [[String: Any]])?.first?["url"] as? String).flatMap(URL.init(string:)),
+                url: URL(string: "https://open.spotify.com/artist/\(id)")!,
+                platform: .spotify
+            )
+        }
+    }
+
+    /// Albums and singles. Spotify files EPs under singles, so a "single" with four
+    /// or more tracks is treated as an EP.
+    func artistReleases(id: String) async throws -> [StackRelease] {
+        var releases: [StackRelease] = []
+        for page in 0..<4 {
+            let json = try await get("/artists/\(id)/albums?include_groups=album,single&limit=50&offset=\(page * 50)")
+            let items = json["items"] as? [[String: Any]] ?? []
+            releases += items.compactMap { album in
+                guard let albumID = album["id"] as? String, let name = album["name"] as? String else { return nil }
+                let tracks = album["total_tracks"] as? Int ?? 0
+                let type: StackRelease.ReleaseType = album["album_type"] as? String == "single"
+                    ? (tracks >= 4 ? .ep : .single) : .album
+                return StackRelease(
+                    id: albumID, title: name,
+                    url: URL(string: "https://open.spotify.com/album/\(albumID)")!,
+                    artworkURL: ((album["images"] as? [[String: Any]])?.first?["url"] as? String).flatMap(URL.init(string:)),
+                    releaseDate: (album["release_date"] as? String).flatMap(ArtistCatalog.parseDate),
+                    type: type
+                )
+            }
+            if json["next"] as? String == nil { break }
+        }
+        return releases
+    }
+
     // MARK: Plumbing
 
     private func get(_ path: String) async throws -> [String: Any] {

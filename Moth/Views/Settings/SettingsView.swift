@@ -4,6 +4,10 @@ struct SettingsView: View {
     @Environment(\.theme) private var theme
     @Environment(\.dismiss) private var dismiss
     @Environment(Connections.self) private var connections
+    @Environment(ProfileStore.self) private var profile
+    @Environment(JournalStore.self) private var journal
+    @AppStorage(SettingsKey.showTopAlbums, store: AppGroup.defaults) private var showTopAlbums = false
+    @AppStorage(SettingsKey.showTopTracks, store: AppGroup.defaults) private var showTopTracks = false
     @AppStorage(SettingsKey.theme, store: AppGroup.defaults) private var themeID = Theme.all[0].id
     @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkHeard = false
     @AppStorage(SettingsKey.haptics, store: AppGroup.defaults) private var haptics = true
@@ -18,6 +22,22 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     profileCard
+
+                    sectionHeader("Profile")
+                    group {
+                        HStack(spacing: 12) {
+                            iconTile("person.2.fill", tint: FrameArt.goldDark)
+                            Text("Top 4 Artists").foregroundStyle(theme.text)
+                            Spacer()
+                            Text("Always shown").font(.subheadline).foregroundStyle(theme.secondaryText)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        divider
+                        toggleRow("Top 4 Albums", icon: "square.stack.fill", tint: FrameArt.gold, isOn: $showTopAlbums)
+                        divider
+                        toggleRow("Top 4 Tracks", icon: "music.note", tint: Color(hex: 0x8A6A3A), isOn: $showTopTracks)
+                    }
 
                     sectionHeader("Appearance")
                     group {
@@ -90,16 +110,38 @@ struct SettingsView: View {
     // MARK: Profile
 
     private var profileCard: some View {
-        HStack(spacing: 14) {
-            GildedInitial(letter: "M", size: 52)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Your Profile").font(.headline).foregroundStyle(theme.text)
-                Text("Accounts and sync are coming soon").font(.footnote).foregroundStyle(theme.secondaryText)
+        NavigationLink {
+            ProfileView().themed(theme)
+        } label: {
+            HStack(spacing: 14) {
+                Group {
+                    if let photo = profile.photo {
+                        Image(uiImage: photo).resizable().scaledToFill()
+                    } else {
+                        GildedInitial(letter: "M", size: 52)
+                    }
+                }
+                .frame(width: 52, height: 64)
+                .clipShape(Ellipse())
+                .overlay { Ellipse().strokeBorder(FrameArt.gold, lineWidth: 2) }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(profile.name.isEmpty ? "Your Profile" : profile.name)
+                        .font(.headline)
+                        .foregroundStyle(theme.text)
+                    Text(journal.log.isEmpty ? "Your top fours, diary and reviews" : "\(journal.log.count) listens · \(journal.rated.count) rated")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(theme.secondaryText.opacity(0.6))
             }
-            Spacer()
+            .padding(16)
+            .background(theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(Rectangle())
         }
-        .padding(16)
-        .background(theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .buttonStyle(.plain)
         .padding(.top, 8)
     }
 

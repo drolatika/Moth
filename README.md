@@ -23,7 +23,10 @@ The app's bundle ID is `com.ryanschlecht.moth` (share extension: `com.ryanschlec
 - **Press and hold** an album to pick it up; throw it toward the other page to move it there (Queue → Heard, or back). Quick swipes still page and scroll as normal.
 - **Pull down** on either page to reveal the search bar under the header. Search finds albums, artists and tracks inside albums (matching tracks show under the album and are highlighted when you open it), with the view options (three lines) beside it: Grid or Rows, and Newest First, By Type or By Service.
 - **Select** lets you mark several as heard (or back to the queue) or remove them at once.
-- **Settings** (gear, top left): profile placeholder for future accounts, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
+- **Artist stacks**: tap + and switch to Artist. Type a name (say, Max Cooper), pick Apple Music, Deezer or Spotify (once connected), choose Albums, EPs and/or Singles, then pick the right artist. Their whole discography lands in the queue as one stack, with the artist's picture as its cover. Tap the stack to open it: tap a release to go to it in its app, tap its circle to mark it heard (the stack moves to Heard once everything in it is heard), hold for Rate & Review or Remove. Adding the same artist again only adds what's new.
+- **Ratings, reviews and notes**: open any album and tap the stars line under its title. Rate in half stars, write a review, keep private notes, and log a listen. Marking an album heard logs a listen automatically (and moving it straight back undoes that).
+- **Profile** (Settings → your name at the top): your picture in an old gilded frame with a candle and cobwebs (tap it to choose a photo), your Top 4 Artists, optional Top 4 Albums and Top 4 Tracks (turn them on in Settings → Profile), what you've heard lately, and your journal: the diary, top and lowest rated, reviews, notes, and most listened artists.
+- **Settings** (gear, top left): profile, theme, app icon (five designs), mark-heard-when-opened, where links open, haptics, connections and listening stats.
 
 ## Connecting listening services
 
@@ -39,7 +42,9 @@ The Spotify Client ID and Last.fm API key aren't secret (both are designed to sh
 
 - **Share extension** (`ShareExtension/`) accepts a URL or text containing a link, fetches metadata, downloads the artwork, saves it, and dismisses itself.
 - **Metadata** (`Shared/MetadataFetcher.swift`) uses Spotify and SoundCloud oEmbed, the iTunes Lookup API for Apple Music, the Deezer API and YouTube oEmbed, then falls back to Open Graph tags (Bandcamp, Tidal, anything else). Short links (`spotify.link`, `deezer.page.link`, …) are resolved first and tracking params are stripped, so saving the same album twice just bumps it to the top.
-- **Opening** tries the universal link (lands in the installed app), then the app's URL scheme, then Safari.
+- **Opening** tries the universal link (lands in the installed app), then the app's URL scheme, then Safari. Bandcamp's app doesn't claim bandcamp.com links, so Bandcamp albums and tracks open with its `x-bandcamp://` scheme, using the album ID read from the page.
+- **Artist stacks** (`Moth/Services/ArtistCatalog.swift`) use the iTunes Search API for Apple Music (the artist picture comes from their Apple Music page), Deezer's public API, and the Spotify Web API when connected. Spotify files EPs as singles, so a "single" with four or more tracks counts as an EP.
+- **Journal and profile** live in `journal.json`, `profile.jpg` and the shared defaults in the App Group container.
 - **Storage** is a JSON file plus downsampled JPEG artwork in the App Group container.
 - **Header art** (`Moth/Views/Header/`): the lantern and moths are drawn in code with SwiftUI `Canvas`, driven by the page position and a timeline, and pause when Reduce Motion is on.
 - **Themes**: 16 in `Shared/Theme.swift`. The default "Moth" theme is a washed near-black so the lantern stands out. "Divine Comedy" draws a star field, angels and a faint Dante and Beatrice behind the library, built by `scripts/make_divine_comedy.py` from a public-domain Renaissance woodcut of the *Paradiso* (`Design/Art/paradiso-woodcut.png`).

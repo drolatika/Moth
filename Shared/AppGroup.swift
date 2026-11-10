@@ -25,4 +25,6 @@ enum SettingsKey {
     static let lastFMUser = "lastFMUser"
     static let libraryLayout = "libraryLayout"
     static let libraryGrouping = "libraryGrouping"
+    static let showTopAlbums = "showTopAlbums"
+    static let showTopTracks = "showTopTracks"
 }

@@ -16,7 +16,7 @@ final class TrackIndex {
             }
         }
         guard !fetching else { return }
-        let missing = items.filter { titles[$0.id] == nil && AlbumDetailsService.supports($0.platform) }
+        let missing = items.filter { titles[$0.id] == nil && !$0.isStack && AlbumDetailsService.supports($0.platform) }
         guard !missing.isEmpty else { return }
         fetching = true
         Task {

@@ -15,14 +15,17 @@ struct AlbumTracksPanel: View {
 
     @Environment(ItemStore.self) private var store
     @Environment(TrackIndex.self) private var trackIndex
+    @Environment(JournalStore.self) private var journal
     @Environment(\.theme) private var theme
 
     @State private var details: AlbumDetails?
     @State private var loading = true
+    @State private var reviewing: ReleaseRef?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             actionBar
+            reviewLine
             trackSection
             creditsSection
         }
@@ -30,6 +33,9 @@ struct AlbumTracksPanel: View {
         .padding(.top, 16)
         .padding(.bottom, 14)
         .background { CutOpenBackground(notchX: notchX) }
+        .sheet(item: $reviewing) { ref in
+            ReviewSheet(ref: ref).environment(journal).themed(theme)
+        }
         .task(id: item.id) {
             loading = true
             details = await AlbumDetailsService.details(for: item)
@@ -63,6 +69,32 @@ struct AlbumTracksPanel: View {
             .accessibilityLabel("Album options")
         }
         .font(.footnote.weight(.semibold))
+        .buttonStyle(.plain)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Review
+
+    /// Your stars and the start of your review, or an invitation to write one.
+    private var reviewLine: some View {
+        let record = journal.record(for: item.linkKey)
+        return Button { reviewing = ReleaseRef(item) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                if let rating = record?.rating {
+                    StarRating(rating: rating, size: 11)
+                } else {
+                    Image(systemName: "star").font(.caption.weight(.semibold)).foregroundStyle(theme.accent)
+                }
+                Text(record?.review ?? record?.notes ?? (record == nil ? "Rate & review" : "Add a review"))
+                    .font(.caption)
+                    .italic(record?.review != nil)
+                    .foregroundStyle(theme.secondaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+        }
         .buttonStyle(.plain)
         .padding(.bottom, 10)
     }
@@ -201,7 +233,7 @@ struct AlbumTracksPanel: View {
 
 /// A recess in the page: darker than the surface, shadowed along its top edge,
 /// catching light along its bottom edge, with a notch pointing at the album.
-private struct CutOpenBackground: View {
+struct CutOpenBackground: View {
     let notchX: CGFloat
     @Environment(\.theme) private var theme
 

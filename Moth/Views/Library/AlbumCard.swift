@@ -12,6 +12,7 @@ struct AlbumCard: View {
         VStack(alignment: .leading, spacing: 8) {
             ArtworkView(item: item)
                 .shadow(color: .black.opacity(theme.isDark ? 0.45 : 0.15), radius: 10, y: 6)
+                .background { if item.isStack { StackEdges(color: item.platform.color) } }
                 .overlay(alignment: .topTrailing) {
                     if let selected { SelectionMark(on: selected).padding(8) }
                 }
@@ -23,8 +24,8 @@ struct AlbumCard: View {
                     .foregroundStyle(theme.text)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                if let artist = item.artist {
-                    Text(artist)
+                if let subtitle = item.subtitle {
+                    Text(subtitle)
                         .font(.footnote)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
@@ -38,7 +39,7 @@ struct AlbumCard: View {
                 HStack(spacing: 6) {
                     PlatformBadge(platform: item.platform, seed: item.id.hashValue)
                     if item.kind != .other {
-                        Text("· \(item.kind.label)")
+                        Text("· \(item.kindLabel)")
                             .font(.caption2)
                             .foregroundStyle(theme.secondaryText.opacity(0.8))
                     }
@@ -68,6 +69,7 @@ struct AlbumRow: View {
         HStack(spacing: 14) {
             ArtworkView(item: item, cornerRadius: 8)
                 .frame(width: 64, height: 64)
+                .background { if item.isStack { StackEdges(color: item.platform.color, cornerRadius: 8, step: 3) } }
                 .shadow(color: .black.opacity(theme.isDark ? 0.4 : 0.12), radius: 6, y: 3)
                 .opacity(selected == false ? 0.75 : 1)
             VStack(alignment: .leading, spacing: 3) {
@@ -75,8 +77,8 @@ struct AlbumRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(theme.text)
                     .lineLimit(1)
-                if let artist = item.artist {
-                    Text(artist).font(.footnote).foregroundStyle(theme.secondaryText).lineLimit(1)
+                if let subtitle = item.subtitle {
+                    Text(subtitle).font(.footnote).foregroundStyle(theme.secondaryText).lineLimit(1)
                 }
                 if let matchedTrack {
                     Text("♪ \(matchedTrack)").font(.caption.weight(.medium)).foregroundStyle(theme.accent).lineLimit(1)
@@ -84,7 +86,7 @@ struct AlbumRow: View {
                 HStack(spacing: 6) {
                     PlatformBadge(platform: item.platform, seed: item.id.hashValue)
                     if item.kind != .other {
-                        Text("· \(item.kind.label)").font(.caption2).foregroundStyle(theme.secondaryText.opacity(0.8))
+                        Text("· \(item.kindLabel)").font(.caption2).foregroundStyle(theme.secondaryText.opacity(0.8))
                     }
                     if item.isPartlyHeard {
                         Text("· \(item.heardTrackCount) heard").font(.caption2.weight(.semibold)).foregroundStyle(theme.accent.opacity(0.85))
@@ -98,6 +100,47 @@ struct AlbumRow: View {
         .padding(.vertical, 2)
         .contentShape(Rectangle())
     }
+}
+
+/// The edges of the records underneath an artist stack, peeking out above it.
+struct StackEdges: View {
+    let color: Color
+    var cornerRadius: CGFloat = 10
+    var step: CGFloat = 5
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        ZStack {
+            edge(depth: 2)
+            edge(depth: 1)
+        }
+    }
+
+    private func edge(depth: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(theme.surface)
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(color.opacity(0.12 / depth))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(theme.text.opacity(0.12), lineWidth: 0.5)
+            }
+            .scaleEffect(1 - 0.06 * depth)
+            .offset(y: -step * depth)
+            .opacity(1 - 0.25 * depth)
+    }
+}
+
+extension SavedItem {
+    /// Under the title: the artist, or for a stack how much it holds.
+    var subtitle: String? {
+        guard let stack else { return artist }
+        return stack.count == 1 ? "1 release" : "\(stack.count) releases"
+    }
+
+    var kindLabel: String { isStack ? "Stack" : kind.label }
 }
 
 /// On themes with background artwork, sets text on a soft label of the page colour

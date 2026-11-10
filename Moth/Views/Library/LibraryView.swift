@@ -38,6 +38,7 @@ struct LibraryView: View {
     @Environment(ItemStore.self) private var store
     @Environment(Connections.self) private var connections
     @Environment(TrackIndex.self) private var trackIndex
+    @Environment(ProfileStore.self) private var profile
     @Environment(\.theme) private var theme
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(SettingsKey.autoMarkListened, store: AppGroup.defaults) private var autoMarkHeard = false
@@ -67,6 +68,9 @@ struct LibraryView: View {
               !item.title.localizedCaseInsensitiveContains(query),
               !(item.artist?.localizedCaseInsensitiveContains(query) ?? false)
         else { return nil }
+        if let release = item.stack?.first(where: { $0.title.localizedCaseInsensitiveContains(query) }) {
+            return release.title
+        }
         return trackIndex.matchingTrack(in: item, query: query)
     }
     private var layout: LibraryLayout { LibraryLayout(rawValue: layoutRaw) ?? .grid }
@@ -79,6 +83,7 @@ struct LibraryView: View {
                 && (query.isEmpty
                     || item.title.localizedCaseInsensitiveContains(query)
                     || (item.artist?.localizedCaseInsensitiveContains(query) ?? false)
+                    || (item.stack?.contains { $0.title.localizedCaseInsensitiveContains(query) } ?? false)
                     || trackIndex.matchingTrack(in: item, query: query) != nil)
         }
     }
@@ -106,10 +111,16 @@ struct LibraryView: View {
         .background { ThemeBackdrop() }
         .overlay(alignment: .bottom) { bottomBar }
         .sheet(isPresented: $showingAdd) {
-            AddLinkView().environment(store).themed(theme)
+            AddLinkView().environment(store).environment(connections).themed(theme)
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView().environment(store).environment(connections).themed(theme)
+            SettingsView()
+                .environment(store)
+                .environment(store.journal)
+                .environment(connections)
+                .environment(profile)
+                .environment(trackIndex)
+                .themed(theme)
         }
         .sheet(item: $browserLink) { link in SafariView(url: link.url).ignoresSafeArea() }
         .onChange(of: scenePhase) { _, phase in
@@ -213,25 +224,30 @@ struct LibraryView: View {
         stride(from: 0, to: items.count, by: 2).map { Array(items[$0..<min($0 + 2, items.count)]) }
     }
 
+    @ViewBuilder
     private func panel(_ item: SavedItem, notchX: CGFloat) -> some View {
-        AlbumTracksPanel(
-            item: item,
-            notchX: notchX,
-            highlight: query,
-            onListen: { url, album in listen(url, platform: item.platform, album: album) },
-            onSelect: {
-                withAnimation(.snappy) { expandedID = nil }
-                selecting = true
-                selection = [item.id]
-            },
-            onRemove: {
-                withAnimation(.snappy) {
-                    expandedID = nil
-                    store.delete(item)
-                }
+        let onListen: (URL, SavedItem?) -> Void = { url, album in listen(url, platform: item.platform, album: album) }
+        let onSelect = {
+            withAnimation(.snappy) { expandedID = nil }
+            selecting = true
+            selection = [item.id]
+        }
+        let onRemove = {
+            withAnimation(.snappy) {
+                expandedID = nil
+                store.delete(item)
             }
-        )
-        .transition(AnyTransition.modifier(active: RevealFromTop(progress: 0), identity: RevealFromTop(progress: 1)))
+        }
+        let reveal = AnyTransition.modifier(active: RevealFromTop(progress: 0), identity: RevealFromTop(progress: 1))
+        if item.isStack {
+            ArtistStackPanel(item: item, notchX: notchX, highlight: query,
+                             onListen: onListen, onSelect: onSelect, onRemove: onRemove)
+                .transition(reveal)
+        } else {
+            AlbumTracksPanel(item: item, notchX: notchX, highlight: query,
+                             onListen: onListen, onSelect: onSelect, onRemove: onRemove)
+                .transition(reveal)
+        }
     }
 
     private struct ShelfSection: Identifiable {
@@ -300,7 +316,7 @@ struct LibraryView: View {
         HStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(theme.secondaryText)
-                TextField("Search albums & artists", text: $searchText)
+                TextField("Search albums, artists & tracks", text: $searchText)
                     .focused($searchFocused)
                     .submitLabel(.search)
                     .autocorrectionDisabled()

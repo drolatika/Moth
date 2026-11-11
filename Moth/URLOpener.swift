@@ -15,13 +15,10 @@ enum URLOpener {
         if platform == .bandcamp {
             // The Bandcamp app doesn't claim bandcamp.com links, so go straight to its scheme.
             Task { @MainActor in
-                guard let appURL = await BandcampLink.appURL(for: url) else {
-                    _ = await application.open(url)
-                    return
+                for appURL in await BandcampLink.appURLs(for: url) {
+                    if await application.open(appURL) { return }
                 }
-                if await !application.open(appURL) {
-                    _ = await application.open(url)
-                }
+                _ = await application.open(url)
             }
             return
         }

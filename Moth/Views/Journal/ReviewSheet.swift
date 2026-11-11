@@ -195,10 +195,19 @@ struct StarRating: View {
 /// A release's cover, from the library's saved copy or its link.
 struct ReleaseArtwork: View {
     let ref: ReleaseRef
-    var size: CGFloat = 48
+    /// nil fills the available width as a square.
+    var size: CGFloat? = 48
     var cornerRadius: CGFloat = 6
 
     var body: some View {
+        Color.clear
+            .frame(width: size, height: size)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay { image }
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private var image: some View {
         Group {
             if let file = ref.artworkFile, let image = ArtworkStore.image(named: file) {
                 Image(uiImage: image).resizable().scaledToFill()
@@ -213,7 +222,5 @@ struct ReleaseArtwork: View {
                 }
             }
         }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }

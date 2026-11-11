@@ -129,10 +129,15 @@ private struct ArtistStackForm: View {
     @State private var chosen: ArtistResult?
     @State private var releases: [StackRelease]?
     @State private var saving = false
+    /// Releases you've unticked (re-releases, duplicates, ones you don't want).
+    @State private var excluded: Set<String> = []
     @FocusState private var fieldFocused: Bool
 
     private var services: [Platform] { ArtistCatalog.services(spotifyConnected: connections.spotifyConnected) }
-    private var picked: [StackRelease] { (releases ?? []).filter { types.contains($0.type) } }
+    /// Everything of the chosen kinds, ticked or not.
+    private var shown: [StackRelease] { (releases ?? []).filter { types.contains($0.type) } }
+    /// What will actually be added.
+    private var picked: [StackRelease] { shown.filter { !excluded.contains($0.id) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -245,10 +250,30 @@ private struct ArtistStackForm: View {
                 Text(summary(releases))
                     .font(.footnote)
                     .foregroundStyle(theme.secondaryText)
+                HStack {
+                    Text("\(picked.count) of \(shown.count) selected · tap to leave one out")
+                        .font(.caption)
+                        .foregroundStyle(theme.secondaryText)
+                    Spacer()
+                    Button(picked.count == shown.count ? "Select None" : "Select All") {
+                        if picked.count == shown.count {
+                            excluded.formUnion(shown.map(\.id))
+                        } else {
+                            excluded.subtract(shown.map(\.id))
+                        }
+                        Haptics.impact(.light)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.accent)
+                }
                 ScrollView {
                     LazyVStack(spacing: 10) {
-                        ForEach(picked) { release in
+                        ForEach(shown) { release in
+                            let on = !excluded.contains(release.id)
                             HStack(spacing: 12) {
+                                Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 20))
+                                    .foregroundStyle(on ? theme.accent : theme.secondaryText.opacity(0.5))
                                 AsyncImage(url: release.artworkURL) { image in
                                     image.resizable().scaledToFill()
                                 } placeholder: {
@@ -257,12 +282,18 @@ private struct ArtistStackForm: View {
                                 .frame(width: 44, height: 44)
                                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(release.title).font(.subheadline).foregroundStyle(theme.text).lineLimit(1)
+                                    Text(release.title).font(.subheadline).foregroundStyle(theme.text).lineLimit(2)
                                     Text([release.year, release.type.label].compactMap { $0 }.joined(separator: " · "))
                                         .font(.caption)
                                         .foregroundStyle(theme.secondaryText)
                                 }
                                 Spacer()
+                            }
+                            .opacity(on ? 1 : 0.45)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if on { excluded.insert(release.id) } else { excluded.remove(release.id) }
+                                Haptics.impact(.light)
                             }
                         }
                     }
@@ -356,6 +387,7 @@ private struct ArtistStackForm: View {
             chosen = artist
             releases = nil
             message = nil
+            excluded = []
         }
         Task {
             do {

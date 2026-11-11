@@ -30,32 +30,46 @@ enum JournalFilter: String, CaseIterable, Identifiable {
 /// Tap anything to rate or review it; hold for more.
 struct JournalView: View {
     @State var filter: JournalFilter
+    /// Inside the profile's tabs: just the entries, without a scroll view, title or filter bar.
+    var embedded = false
     @Environment(JournalStore.self) private var journal
     @Environment(\.theme) private var theme
     @State private var reviewing: ReleaseRef?
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                filterBar.padding(.bottom, 14)
-                switch filter {
-                case .diary: diary
-                case .topRated: ranked(journal.topRated)
-                case .lowestRated: ranked(journal.lowestRated)
-                case .reviews: writing(journal.reviewed, text: \.review)
-                case .notes: writing(journal.withNotes, text: \.notes)
-                case .artists: artists
+        Group {
+            if embedded {
+                entries
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        filterBar.padding(.bottom, 14)
+                        entries
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 30)
                 }
+                .background(theme.background.ignoresSafeArea())
+                .navigationTitle(filter.title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(theme.background, for: .navigationBar)
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 30)
         }
-        .background(theme.background.ignoresSafeArea())
-        .navigationTitle(filter.title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(theme.background, for: .navigationBar)
         .sheet(item: $reviewing) { ref in
             ReviewSheet(ref: ref).environment(journal).themed(theme)
+        }
+    }
+
+    private var entries: some View {
+        LazyVStack(alignment: .leading, spacing: 0) {
+            switch filter {
+            case .diary: diary
+            case .topRated: ranked(journal.topRated)
+            case .lowestRated: ranked(journal.lowestRated)
+            case .reviews: writing(journal.reviewed, text: \.review)
+            case .notes: writing(journal.withNotes, text: \.notes)
+            case .artists: artists
+            }
         }
     }
 

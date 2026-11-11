@@ -8,7 +8,8 @@ struct MothHeader: View {
     let queueCount: Int
     let heardCount: Int
     let selection: SelectionBar?
-    let onSettings: () -> Void
+    /// Opens your profile (settings live there, behind its gear).
+    let onProfile: () -> Void
     let onAdd: () -> Void
 
     struct SelectionBar {
@@ -96,7 +97,14 @@ struct MothHeader: View {
             .foregroundStyle(theme.accent)
         } else {
             HStack {
-                circleButton("gearshape", label: "Settings", action: onSettings)
+                Button(action: onProfile) {
+                    FramedAvatar(size: 44)
+                        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Profile")
                 Spacer()
                 Wordmark()
                 Spacer()

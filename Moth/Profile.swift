@@ -36,11 +36,13 @@ enum ShowcaseKind: String, CaseIterable, Identifiable {
 @Observable
 final class ProfileStore {
     private(set) var name: String
+    private(set) var bio: String
     private(set) var photo: UIImage?
     private(set) var showcase: [ShowcaseKind: [ShowcaseItem?]]
 
     private struct Saved: Codable {
         var name: String
+        var bio: String?
         var showcase: [String: [ShowcaseItem?]]
     }
 
@@ -50,6 +52,7 @@ final class ProfileStore {
     init() {
         let saved = AppGroup.defaults.data(forKey: Self.key).flatMap { try? JSONDecoder().decode(Saved.self, from: $0) }
         name = saved?.name ?? ""
+        bio = saved?.bio ?? ""
         var showcase: [ShowcaseKind: [ShowcaseItem?]] = [:]
         for kind in ShowcaseKind.allCases {
             let slots = saved?.showcase[kind.rawValue] ?? []
@@ -59,8 +62,9 @@ final class ProfileStore {
         photo = UIImage(contentsOfFile: Self.photoURL.path)
     }
 
-    func setName(_ name: String) {
+    func setName(_ name: String, bio: String) {
         self.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.bio = bio.trimmingCharacters(in: .whitespacesAndNewlines)
         persist()
     }
 
@@ -102,7 +106,7 @@ final class ProfileStore {
     }
 
     private func persist() {
-        let saved = Saved(name: name, showcase: Dictionary(uniqueKeysWithValues: showcase.map { ($0.key.rawValue, $0.value) }))
+        let saved = Saved(name: name, bio: bio, showcase: Dictionary(uniqueKeysWithValues: showcase.map { ($0.key.rawValue, $0.value) }))
         if let data = try? JSONEncoder().encode(saved) { AppGroup.defaults.set(data, forKey: Self.key) }
     }
 }

@@ -2,14 +2,17 @@ import Foundation
 
 /// Bandcamp's app doesn't pick up bandcamp.com links (artist pages live on their own
 /// subdomains), so Moth opens albums and tracks with the app's own scheme instead:
-/// x-bandcamp://show_tralbum?tralbum_type=a&tralbum_id=… The ID comes from the
-/// page itself and is remembered after the first lookup.
+/// bandcamp://show_tralbum?tralbum_type=a&tralbum_id=…&play (the form Bandcamp's own
+/// "open in app" links use), with the older x-bandcamp:// form as a second try. The
+/// ID comes from the page itself and is remembered after the first lookup.
 enum BandcampLink {
-    private static let cacheKey = "bandcampTralbumIDs"
+    private static let cacheKey = "bandcampTralbumIDs.v2"
 
-    static func appURL(for url: URL) async -> URL? {
-        guard let (type, id) = await tralbum(for: url) else { return nil }
-        return URL(string: "x-bandcamp://show_tralbum?tralbum_type=\(type)&tralbum_id=\(id)")
+    /// Links to try in order; the caller falls back to the web page if none opens.
+    static func appURLs(for url: URL) async -> [URL] {
+        guard let (type, id) = await tralbum(for: url) else { return [] }
+        let query = "show_tralbum?tralbum_type=\(type)&tralbum_id=\(id)"
+        return ["bandcamp://\(query)&play", "x-bandcamp://\(query)"].compactMap(URL.init(string:))
     }
 
     /// ("a" or "t", numeric ID) for an album or track page.

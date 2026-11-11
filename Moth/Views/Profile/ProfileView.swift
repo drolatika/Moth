@@ -1,22 +1,46 @@
 import PhotosUI
 import SwiftUI
 
-/// Your page: the haunted portrait, your name, your top fours, what you've heard
-/// lately, and the way into your diary, ratings, reviews and notes.
+/// The profile, opened full-screen from the framed avatar in the library header.
+struct ProfileScreen: View {
+    var body: some View {
+        NavigationStack { ProfileView() }
+    }
+}
+
+enum ProfileTab: String, CaseIterable, Identifiable {
+    case profile, diary, reviews, ratings
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+}
+
+/// Your page, laid out like a Letterboxd profile: tabs along the top, then your
+/// framed portrait, name and bio, a row of counts, your favourites, recent
+/// activity with your stars, how your ratings spread, and links into the journal.
 struct ProfileView: View {
+    /// Pushed from Settings rather than opened from the library: no gear or close button.
+    var fromSettings = false
+
     @Environment(ProfileStore.self) private var profile
     @Environment(JournalStore.self) private var journal
     @Environment(ItemStore.self) private var store
+    @Environment(Connections.self) private var connections
+    @Environment(TrackIndex.self) private var trackIndex
     @Environment(\.theme) private var theme
+    @Environment(\.dismiss) private var dismiss
     @AppStorage(SettingsKey.showTopAlbums, store: AppGroup.defaults) private var showAlbums = false
     @AppStorage(SettingsKey.showTopTracks, store: AppGroup.defaults) private var showTracks = false
 
+    @State private var tab: ProfileTab = .profile
+    @State private var lowestFirst = false
     @State private var photoPick: PhotosPickerItem?
     @State private var picking: SlotTarget?
     @State private var editingName = false
     @State private var nameEntry = ""
+    @State private var bioEntry = ""
     @State private var reviewing: ReleaseRef?
-    /// The top-four row being edited, if any.
+    @State private var showingSettings = false
+    /// The favourites row being edited, if any.
     @State private var editing: ShowcaseKind?
 
     private var shownKinds: [ShowcaseKind] {
@@ -25,52 +49,58 @@ struct ProfileView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 26) {
-                VStack(spacing: 6) {
-                    PhotosPicker(selection: $photoPick, matching: .images) {
-                        HauntedPortrait(photo: profile.photo)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        if profile.photo != nil {
-                            Button(role: .destructive) { profile.removePhoto() } label: {
-                                Label("Remove Photo", systemImage: "trash")
-                            }
+            VStack(spacing: 0) {
+                tabBar
+                    .padding(.horizontal, 16)
+                    .padding(.top, 4)
+                    .padding(.bottom, 14)
+                switch tab {
+                case .profile:
+                    profileTab
+                case .diary:
+                    JournalView(filter: .diary, embedded: true).id("diary").padding(.horizontal, 16)
+                case .reviews:
+                    JournalView(filter: .reviews, embedded: true).id("reviews").padding(.horizontal, 16)
+                case .ratings:
+                    VStack(spacing: 12) {
+                        Picker("Order", selection: $lowestFirst) {
+                            Text("Highest").tag(false)
+                            Text("Lowest").tag(true)
                         }
+                        .pickerStyle(.segmented)
+                        JournalView(filter: lowestFirst ? .lowestRated : .topRated, embedded: true)
+                            .id(lowestFirst ? "lowest" : "highest")
                     }
-                    .accessibilityLabel("Profile photo")
-                    .accessibilityHint("Choose a photo")
-
-                    Button {
-                        nameEntry = profile.name
-                        editingName = true
-                    } label: {
-                        Text(profile.name.isEmpty ? "Your Name" : profile.name)
-                            .font(MothFont.gothic(36))
-                            .foregroundStyle(profile.name.isEmpty ? theme.secondaryText : theme.text)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 10)
-
-                    Text(statsLine)
-                        .font(.footnote)
-                        .foregroundStyle(theme.secondaryText)
+                    .padding(.horizontal, 16)
                 }
-
-                ForEach(shownKinds) { kind in
-                    showcase(kind)
-                }
-
-                recentlyHeard
-                journalLinks
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 36)
+            .padding(.bottom, 40)
         }
+        .scrollIndicators(.hidden)
         .background(theme.background.ignoresSafeArea())
-        .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(theme.background, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(profile.name.isEmpty ? "Profile" : profile.name)
+                    .font(.headline)
+                    .foregroundStyle(theme.text)
+            }
+            if !fromSettings {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showingSettings = true } label: {
+                        Image(systemName: "gearshape").foregroundStyle(theme.text)
+                    }
+                    .accessibilityLabel("Settings")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").foregroundStyle(theme.text)
+                    }
+                    .accessibilityLabel("Close")
+                }
+            }
+        }
         .onChange(of: photoPick) { _, pick in
             guard let pick else { return }
             Task {
@@ -78,9 +108,10 @@ struct ProfileView: View {
                 photoPick = nil
             }
         }
-        .alert("Your name", isPresented: $editingName) {
+        .alert("Edit profile", isPresented: $editingName) {
             TextField("Name", text: $nameEntry)
-            Button("Save") { profile.setName(nameEntry) }
+            TextField("Bio", text: $bioEntry)
+            Button("Save") { profile.setName(nameEntry, bio: bioEntry) }
             Button("Cancel", role: .cancel) {}
         }
         .sheet(item: $picking) { target in
@@ -93,39 +124,178 @@ struct ProfileView: View {
         .sheet(item: $reviewing) { ref in
             ReviewSheet(ref: ref).environment(journal).themed(theme)
         }
+        .sheet(isPresented: $showingSettings) {
+            SettingsView()
+                .environment(store)
+                .environment(journal)
+                .environment(connections)
+                .environment(profile)
+                .environment(trackIndex)
+                .themed(theme)
+        }
     }
 
-    private var statsLine: String {
-        let listens = journal.log.count
-        let rated = journal.rated.count
-        let reviews = journal.reviewed.count
-        return [
-            listens == 1 ? "1 listen" : "\(listens) listens",
-            "\(rated) rated",
-            reviews == 1 ? "1 review" : "\(reviews) reviews",
-        ].joined(separator: " · ")
-    }
+    // MARK: Tabs
 
-    // MARK: Top fours
-
-    private func showcase(_ kind: ShowcaseKind) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                sectionTitle(kind.title)
-                Button(editing == kind ? "Done" : "Edit") {
-                    withAnimation(.snappy) { editing = editing == kind ? nil : kind }
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(ProfileTab.allCases) { option in
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { tab = option }
                     Haptics.impact(.light)
-                }
-                .font(.subheadline.weight(editing == kind ? .semibold : .medium))
-                .foregroundStyle(theme.accent)
-            }
-            HStack(alignment: .top, spacing: 12) {
-                ForEach(0..<4, id: \.self) { index in
-                    slot(kind, index: index)
+                } label: {
+                    Text(option.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tab == option ? theme.text : theme.secondaryText)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background {
+                            if tab == option {
+                                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                    .fill(theme.text.opacity(theme.isDark ? 0.16 : 0.1))
+                            }
+                        }
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
         }
+        .padding(3)
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    // MARK: Profile tab
+
+    private var profileTab: some View {
+        VStack(spacing: 0) {
+            header
+            statsRow
+                .padding(.top, 18)
+                .padding(.bottom, 4)
+            ForEach(shownKinds) { kind in
+                section(kind.favouritesTitle, trailing: {
+                    Button(editing == kind ? "Done" : "Edit") {
+                        withAnimation(.snappy) { editing = editing == kind ? nil : kind }
+                        Haptics.impact(.light)
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.accent)
+                }) {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(0..<4, id: \.self) { index in
+                            slot(kind, index: index).frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+            recentActivity
+            ratingsChart
+            journalRows
+        }
+    }
+
+    private var header: some View {
+        VStack(spacing: 4) {
+            PhotosPicker(selection: $photoPick, matching: .images) {
+                HauntedPortrait(photo: profile.photo)
+                    .scaleEffect(0.74)
+                    .frame(width: HauntedPortrait.size * 0.74, height: HauntedPortrait.size * 0.74)
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
+                if profile.photo != nil {
+                    Button(role: .destructive) { profile.removePhoto() } label: {
+                        Label("Remove Photo", systemImage: "trash")
+                    }
+                }
+            }
+            .accessibilityLabel("Profile photo")
+            .accessibilityHint("Choose a photo")
+
+            Button {
+                nameEntry = profile.name
+                bioEntry = profile.bio
+                editingName = true
+            } label: {
+                VStack(spacing: 4) {
+                    Text(profile.name.isEmpty ? "Your Name" : profile.name)
+                        .font(MothFont.gothic(30))
+                        .foregroundStyle(profile.name.isEmpty ? theme.secondaryText : theme.text)
+                    Text(profile.bio.isEmpty ? "Tap to add a bio" : profile.bio)
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryText.opacity(profile.bio.isEmpty ? 0.6 : 1))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 30)
+            .padding(.top, 6)
+        }
+    }
+
+    private var statsRow: some View {
+        let year = Calendar.current.component(.year, from: .now)
+        let thisYear = journal.log.filter { Calendar.current.component(.year, from: $0.date) == year }.count
+        let stats: [(Int, String, ProfileTab)] = [
+            (journal.log.count, "Heard", .diary),
+            (thisYear, "This Year", .diary),
+            (journal.rated.count, "Rated", .ratings),
+            (journal.reviewed.count, "Reviews", .reviews),
+        ]
+        return HStack(spacing: 0) {
+            ForEach(Array(stats.enumerated()), id: \.offset) { index, stat in
+                if index > 0 {
+                    Rectangle().fill(theme.text.opacity(0.1)).frame(width: 0.5, height: 30)
+                }
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { tab = stat.2 }
+                } label: {
+                    VStack(spacing: 2) {
+                        Text("\(stat.0)")
+                            .font(.title3.weight(.semibold).monospacedDigit())
+                            .foregroundStyle(theme.text)
+                        Text(stat.1.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.6)
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: Sections
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        section(title, trailing: { EmptyView() }, content: content)
+    }
+
+    private func section<Trailing: View, Content: View>(
+        _ title: String,
+        @ViewBuilder trailing: () -> Trailing,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Rectangle().fill(theme.text.opacity(0.1)).frame(height: 0.5)
+            HStack(alignment: .firstTextBaseline) {
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .semibold))
+                    .tracking(1)
+                    .foregroundStyle(theme.secondaryText)
+                Spacer()
+                trailing()
+            }
+            .padding(.horizontal, 16)
+            content()
+                .padding(.horizontal, 16)
+        }
+        .padding(.top, 14)
+        .padding(.bottom, 4)
     }
 
     @ViewBuilder
@@ -133,20 +303,20 @@ struct ProfileView: View {
         let item = profile.slots(kind)[index]
         let target = SlotTarget(kind: kind, index: index)
         let isEditing = editing == kind
+        let radius: CGFloat = kind == .artists ? 999 : 4
         VStack(spacing: 6) {
             Group {
                 if let item {
                     ShowcaseImage(item: item, round: kind == .artists)
                         .overlay {
                             if isEditing {
-                                // Tap to swap it for something else.
                                 ZStack {
                                     Color.black.opacity(0.45)
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundStyle(.white)
                                 }
-                                .clipShape(RoundedRectangle(cornerRadius: kind == .artists ? 999 : 6, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
                             }
                         }
                         .overlay(alignment: .topLeading) {
@@ -166,7 +336,7 @@ struct ProfileView: View {
                             }
                         }
                 } else {
-                    emptySlot(round: kind == .artists)
+                    emptySlot(radius: radius)
                 }
             }
             .aspectRatio(1, contentMode: .fit)
@@ -194,126 +364,184 @@ struct ProfileView: View {
                 }
             }
 
-            if let item {
-                VStack(spacing: 1) {
-                    Text(item.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(theme.text)
-                    if kind != .artists, let subtitle = item.subtitle {
-                        Text(subtitle).font(.caption2).foregroundStyle(theme.secondaryText)
-                    }
-                }
-                .lineLimit(1)
-                .multilineTextAlignment(.center)
+            if kind == .artists, let item {
+                Text(item.title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(theme.text)
+                    .lineLimit(1)
             }
         }
     }
 
-    private func emptySlot(round: Bool) -> some View {
-        let shape = RoundedRectangle(cornerRadius: round ? 999 : 6, style: .continuous)
+    private func emptySlot(radius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return shape
-            .strokeBorder(theme.secondaryText.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-            .background(shape.fill(theme.surface.opacity(0.5)))
+            .strokeBorder(theme.secondaryText.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            .background(shape.fill(theme.surface.opacity(0.6)))
             .overlay {
                 Image(systemName: "plus")
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(theme.secondaryText)
             }
             .contentShape(shape)
     }
 
-    // MARK: Recently heard
+    // MARK: Recent activity
 
-    @ViewBuilder
-    private var recentlyHeard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                sectionTitle("Recently Heard")
-                Spacer()
-                NavigationLink("See All") { JournalView(filter: .diary).themed(theme) }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(theme.accent)
-            }
-            if journal.log.isEmpty {
-                Text("Albums you mark heard, and listens you log from a review, show up here.")
-                    .font(.footnote)
-                    .foregroundStyle(theme.secondaryText)
-            } else {
-                ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach(journal.log.prefix(12)) { entry in
-                            Button { reviewing = entry.ref } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    ReleaseArtwork(ref: entry.ref, size: 86)
-                                    if let rating = journal.rating(for: entry.ref.key) {
-                                        StarRating(rating: rating, size: 9, spacing: 1)
+    private var recentActivity: some View {
+        section("Recent Activity") {
+            VStack(spacing: 12) {
+                if journal.log.isEmpty {
+                    Text("Albums you mark heard, and listens you log from a review, show up here.")
+                        .font(.footnote)
+                        .foregroundStyle(theme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(0..<4, id: \.self) { index in
+                            Group {
+                                if index < journal.log.count {
+                                    let entry = journal.log[index]
+                                    Button { reviewing = entry.ref } label: {
+                                        VStack(alignment: .leading, spacing: 5) {
+                                            ReleaseArtwork(ref: entry.ref, size: nil, cornerRadius: 4)
+                                                .shadow(color: .black.opacity(theme.isDark ? 0.4 : 0.12), radius: 4, y: 2)
+                                            if let rating = journal.rating(for: entry.ref.key) {
+                                                StarRating(rating: rating, size: 9, spacing: 1)
+                                            } else {
+                                                Text(" ").font(.system(size: 9))
+                                            }
+                                        }
                                     }
-                                    Text(entry.date, format: .dateTime.month(.abbreviated).day())
-                                        .font(.caption2)
-                                        .foregroundStyle(theme.secondaryText)
+                                    .buttonStyle(.plain)
+                                } else {
+                                    Color.clear.aspectRatio(1, contentMode: .fit)
                                 }
-                                .frame(width: 86, alignment: .leading)
                             }
-                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity)
                         }
                     }
                 }
-                .scrollIndicators(.hidden)
+                Button {
+                    withAnimation(.snappy(duration: 0.2)) { tab = .diary }
+                } label: {
+                    HStack {
+                        Text("More activity").foregroundStyle(theme.text)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    // MARK: Journal
+    // MARK: Ratings
 
-    private var journalLinks: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Journal")
-            VStack(spacing: 0) {
-                ForEach(JournalFilter.allCases) { filter in
-                    NavigationLink {
-                        JournalView(filter: filter).themed(theme)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: filter.symbol)
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(theme.accent)
-                                .frame(width: 24)
-                            Text(filter.title).foregroundStyle(theme.text)
-                            Spacer()
-                            Text("\(count(filter))").foregroundStyle(theme.secondaryText)
-                            Image(systemName: "chevron.right")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(theme.secondaryText.opacity(0.6))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    if filter != JournalFilter.allCases.last {
-                        Divider().overlay(theme.text.opacity(0.06)).padding(.leading, 50)
+    private var ratingsChart: some View {
+        let buckets = (1...10).map { step in
+            journal.rated.filter { Int((($0.rating ?? 0) * 2).rounded()) == step }.count
+        }
+        let peak = max(buckets.max() ?? 0, 1)
+        return section("Ratings", trailing: {
+            Text("\(journal.rated.count)")
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(theme.secondaryText)
+        }) {
+            HStack(alignment: .bottom, spacing: 8) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(theme.accent)
+                HStack(alignment: .bottom, spacing: 3) {
+                    ForEach(0..<10, id: \.self) { index in
+                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                            .fill(theme.secondaryText.opacity(buckets[index] == 0 ? 0.15 : 0.45))
+                            .frame(height: max(3, 54 * CGFloat(buckets[index]) / CGFloat(peak)))
+                            .frame(maxWidth: .infinity)
                     }
                 }
+                .frame(height: 56, alignment: .bottom)
+                StarRating(rating: 5, size: 8, spacing: 0.5)
             }
-            .background(theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(journal.rated.count) ratings")
         }
     }
 
-    private func count(_ filter: JournalFilter) -> Int {
-        switch filter {
-        case .diary: journal.log.count
-        case .topRated, .lowestRated: journal.rated.count
-        case .reviews: journal.reviewed.count
-        case .notes: journal.withNotes.count
-        case .artists: journal.topArtists.count
+    // MARK: Journal links
+
+    private var journalRows: some View {
+        let rows: [(JournalFilter, Int)] = [
+            (.diary, journal.log.count),
+            (.reviews, journal.reviewed.count),
+            (.notes, journal.withNotes.count),
+            (.topRated, journal.rated.count),
+            (.artists, journal.topArtists.count),
+        ]
+        return VStack(spacing: 0) {
+            Rectangle().fill(theme.text.opacity(0.1)).frame(height: 0.5)
+            ForEach(rows, id: \.0) { row in
+                let (filter, count) = row
+                NavigationLink {
+                    JournalView(filter: filter).themed(theme)
+                } label: {
+                    HStack {
+                        Text(filter == .topRated ? "Ratings" : filter.title).foregroundStyle(theme.text)
+                        Spacer()
+                        Text("\(count)").foregroundStyle(theme.secondaryText).monospacedDigit()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(theme.secondaryText.opacity(0.6))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 13)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Rectangle().fill(theme.text.opacity(0.1)).frame(height: 0.5).padding(.leading, 16)
+            }
+        }
+        .padding(.top, 14)
+    }
+}
+
+extension ShowcaseKind {
+    var favouritesTitle: String {
+        switch self {
+        case .artists: "Favorite Artists"
+        case .albums: "Favorite Albums"
+        case .tracks: "Favorite Tracks"
         }
     }
+}
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(MothFont.gothic(24))
-            .foregroundStyle(theme.text)
-            .frame(maxWidth: .infinity, alignment: .leading)
+/// Your photo in a tiny copy of the portrait frame: the way into your profile.
+struct FramedAvatar: View {
+    var size: CGFloat = 42
+    @Environment(ProfileStore.self) private var profile
+
+    var body: some View {
+        let opening = size * (1 - 2 * 110.0 / 900)
+        ZStack {
+            Group {
+                if let photo = profile.photo {
+                    Image(uiImage: photo).resizable().scaledToFill()
+                } else {
+                    Color(hex: 0x241C16)
+                    Image(systemName: "person.fill")
+                        .font(.system(size: size * 0.32))
+                        .foregroundStyle(Color(hex: 0x6A5A4A))
+                }
+            }
+            .frame(width: opening + 1, height: opening + 1)
+            .clipped()
+            Image("PortraitFrame").resizable().frame(width: size, height: size)
+        }
+        .frame(width: size, height: size)
     }
 }
 

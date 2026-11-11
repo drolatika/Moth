@@ -50,7 +50,7 @@ struct LibraryView: View {
     @State private var page: Shelf? = .queue
     @State private var searchText = ""
     @State private var showingAdd = false
-    @State private var showingSettings = false
+    @State private var showingProfile = false
     @State private var selecting = false
     @State private var selection: Set<UUID> = []
     @State private var draggingCard = false
@@ -99,7 +99,7 @@ struct LibraryView: View {
                     onCancel: endSelecting,
                     onSelectAll: { selection = Set(items(on: currentShelf).map(\.id)) }
                 ) : nil,
-                onSettings: { showingSettings = true },
+                onProfile: { showingProfile = true },
                 onAdd: { showingAdd = true }
             )
             if searchVisible {
@@ -113,8 +113,8 @@ struct LibraryView: View {
         .sheet(isPresented: $showingAdd) {
             AddLinkView().environment(store).environment(connections).themed(theme)
         }
-        .sheet(isPresented: $showingSettings) {
-            SettingsView()
+        .fullScreenCover(isPresented: $showingProfile) {
+            ProfileScreen()
                 .environment(store)
                 .environment(store.journal)
                 .environment(connections)
